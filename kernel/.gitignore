@@ -1,0 +1,4 @@
+Module.symvers
+uvesafb.mod.c
+*.ko
+*.o
