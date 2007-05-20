@@ -42,6 +42,13 @@ struct vbe_crtc_ib {
 } __attribute__ ((packed));
 
 #define VBE_MODE_VGACOMPAT	0x20
+#define VBE_MODE_COLOR		0x08
+#define VBE_MODE_SUPPORTEDHW	0x01
+#define VBE_MODE_GRAPHICS	0x10
+#define VBE_MODE_LFB		0x80
+
+#define VBE_MODE_MASK		(VBE_MODE_COLOR | VBE_MODE_SUPPORTEDHW | \
+				VBE_MODE_GRAPHICS | VBE_MODE_LFB)
 
 struct vbe_mode_ib {
 	/* for all VBE revisions */
@@ -107,16 +114,6 @@ struct uvesafb_pal_entry {
 	u_char blue, green, red, pad;
 } __attribute__ ((packed));
 
-struct uvesafb_par {
-	u8 *vbe_state;
-	int vbe_state_size;
-	atomic_t ref_count;
-
-	u32 mem_total;
-	int mode_idx;
-	struct vbe_crtc_ib crtc;
-};
-
 struct uvesafb_ktask {
 	struct uvesafb_task t;
 	u8 *buf;
@@ -136,5 +133,18 @@ do {								\
 
 static int uvesafb_exec(struct uvesafb_ktask *tsk);
 
-#endif
+struct uvesafb_par {
+	struct vbe_ib vbe_ib;
+	struct vbe_mode_ib *vbe_modes;
+	int vbe_modes_cnt;
 
+	u8 *vbe_state;
+	int vbe_state_size;
+	atomic_t ref_count;
+
+	u32 mem_total;
+	int mode_idx;
+	struct vbe_crtc_ib crtc;
+};
+
+#endif

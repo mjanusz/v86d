@@ -1,6 +1,3 @@
-#include <asm/types.h>
-
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
 
@@ -17,19 +14,7 @@
 #include <time.h>
 #include <fcntl.h>
 
-#include <linux/connector.h>
-#include <asm/vm86.h>
-
-#define u8 __u8
-#define u16 __u16
-#define u32 __u32
-
-struct completion;
-
-#include "kernel/uvesafb.h"
-
-//#define ulog(args...)	do {} while (0)
-#define ulog(args...)		fprintf(stdout, ##args)
+#include "v86.h"
 
 static int need_exit;
 static __u32 seq;
@@ -64,18 +49,14 @@ static int netlink_send(int s, struct cn_msg *msg)
 int req_exec(int s, struct cn_msg *msg)
 {
 	struct uvesafb_task *tsk = (struct uvesafb_task*)(msg + 1);
+	u8 *buf = (u8*)tsk + sizeof(struct uvesafb_task);
 	int i;
 
-//	for (i = 0; i < msg->len + sizeof(struct cn_msg); i++) {
-//		ulog("%x ", blah[i]);
-//	}
+	ulog("performing request\n");
+	v86_task(tsk, buf);
+	ulog("request done\n");
+	netlink_send(s, msg);
 
-	ulog("got %d | %d\n", tsk->flags, msg->len);
-
-	if (tsk->flags & TF_VBEIB) {
-		ulog("%d\n", s);
-		netlink_send(s, msg);
-	}
 	return 0;
 }
 
@@ -120,8 +101,10 @@ int main(int argc, char *argv[])
 	setsid();
 	chdir("/");
 
-	ulog("it's alive %d!\n", s);
+	if (v86_init())
+		return -1;
 
+	ulog("it's alive %d!\n", s);
 	memset(buf, 0, sizeof(buf));
 
 /*	data = (struct cn_msg *)buf;

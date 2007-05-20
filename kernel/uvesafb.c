@@ -38,7 +38,6 @@ static void uvesafb_cn_callback(void *data)
 	if (tsk->t.buf_len && tsk->buf)
 		memcpy(tsk->buf, ((u8*)utsk) + sizeof(struct uvesafb_task), tsk->t.buf_len);
 
-	printk("complete\n");
 	complete(tsk->done);
 	return;
 }
@@ -77,9 +76,15 @@ static int uvesafb_exec(struct uvesafb_ktask *tsk)
 	m->seq = seq;
 	m->len = len;
 	m->ack = random32();
+
+	/* uvesafb_task structure */
 	memcpy(m + 1, tsk, sizeof(struct uvesafb_task));
+
+	/* buffer */
 	memcpy(((u8*)m) + (sizeof(struct uvesafb_task) + sizeof(*m)), tsk->buf, tsk->t.buf_len);
 
+	/* Save the message ack number so that we can find the kernel
+	 * part of this task when a reply is received from userspace. */
 	tsk->ack = m->ack;
 	uvfb_tasks[seq] = tsk;
 
@@ -93,6 +98,7 @@ static int uvesafb_exec(struct uvesafb_ktask *tsk)
 	if (!err)
 		wait_for_completion_timeout(tsk->done, msecs_to_jiffies(10000));
 
+	printk("pre-wait-for-completion err: %x\n", err);
 	uvfb_tasks[seq] = NULL;
 
 	seq++;
@@ -101,31 +107,162 @@ static int uvesafb_exec(struct uvesafb_ktask *tsk)
 
 	printk("done: %x\n", tsk->done->done);
 
-	return !tsk->done->done;
+	return (tsk->done->done >= 0) ? 0 : 1;
 }
+
+static int __init inline uvesafb_vbe_getinfo(struct uvesafb_ktask *tsk,
+	struct uvesafb_par* par)
+{
+	int err;
+
+	tsk->t.regs.eax = 0x4f00;
+	tsk->t.flags = TF_VBEIB;
+	tsk->t.buf_len = sizeof(struct vbe_ib);
+	tsk->buf = (u8*) &par->vbe_ib;
+	strncpy(par->vbe_ib.vbe_signature, "VBE2", 4);
+
+	err = uvesafb_exec(tsk);
+	if (err || (tsk->t.regs.eax & 0xffff) != 0x004f) {
+		printk(KERN_ERR "uvesafb: Getting VBE info block failed "
+				"(eax=0x%x, err=%x)\n", (u32)tsk->t.regs.eax,
+				err);
+		return -EINVAL;
+	}
+
+	if (par->vbe_ib.vbe_version < 0x0200) {
+		printk(KERN_ERR "uvesafb: Sorry, pre-VBE 2.0 cards are "
+				"not supported.\n");
+		return -EINVAL;
+	}
+
+	if (!par->vbe_ib.mode_list_ptr) {
+	    printk(KERN_ERR "uvesafb: Missing mode list!\n");
+	    return -EINVAL;
+	}
+
+	printk(KERN_INFO "uvesafb: ");
+
+	/* Convert string pointers and the mode list pointer into
+	 * usable addresses. Print informational messages about the
+	 * video adapter and its vendor. */
+	if (par->vbe_ib.oem_vendor_name_ptr) {
+		par->vbe_ib.oem_vendor_name_ptr = (u32)tsk->buf +
+			par->vbe_ib.oem_vendor_name_ptr;
+		printk("%s, ", (char*)par->vbe_ib.oem_vendor_name_ptr);
+	}
+
+	if (par->vbe_ib.oem_product_name_ptr) {
+		par->vbe_ib.oem_product_name_ptr = (u32)tsk->buf +
+			par->vbe_ib.oem_product_name_ptr;
+		printk("%s, ", (char*)par->vbe_ib.oem_product_name_ptr);
+	}
+
+	if (par->vbe_ib.oem_product_rev_ptr) {
+		par->vbe_ib.oem_product_rev_ptr = (u32)tsk->buf +
+			par->vbe_ib.oem_product_rev_ptr;
+		printk("%s, ", (char*)par->vbe_ib.oem_product_rev_ptr);
+	}
+
+	if (par->vbe_ib.oem_string_ptr) {
+		par->vbe_ib.oem_string_ptr = (u32)tsk->buf +
+			par->vbe_ib.oem_string_ptr;
+		printk("OEM: %s, ", (char*)par->vbe_ib.oem_string_ptr);
+	}
+
+	printk("VBE v%d.%d\n", ((par->vbe_ib.vbe_version & 0xff00) >> 8),
+		 par->vbe_ib.vbe_version & 0xff);
+
+	if (par->vbe_ib.mode_list_ptr)
+		par->vbe_ib.mode_list_ptr = (u32)tsk->buf +
+			par->vbe_ib.mode_list_ptr;
+
+	return 0;
+}
+
+static int __init inline uvesafb_vbe_getmodes(struct uvesafb_ktask *tsk,
+		struct uvesafb_par *par)
+{
+	int off = 0, err;
+	u16 *mode;
+
+	par->vbe_modes_cnt = 0;
+
+	/* Count available modes. */
+	mode = (u16*)par->vbe_ib.mode_list_ptr;
+	while (*mode != 0xffff) {
+		par->vbe_modes_cnt++;
+		mode++;
+	}
+
+	par->vbe_modes = kzalloc(sizeof(struct vbe_mode_ib) *
+				par->vbe_modes_cnt, GFP_KERNEL);
+	if (!par->vbe_modes)
+		return -ENOMEM;
+
+	/* Get mode info for all available modes. */
+	mode = (u16*)par->vbe_ib.mode_list_ptr;
+
+	while (*mode != 0xffff) {
+		struct vbe_mode_ib *mib;
+
+		tsk->t.regs.eax = 0x4f01;
+		tsk->t.regs.ecx = (u32) *mode;
+		tsk->t.flags = TF_BUF_RET | TF_BUF_ESDI;
+		tsk->t.buf_len = sizeof(struct vbe_mode_ib);
+		tsk->buf = (u8*) par->vbe_modes + off;
+
+		err = uvesafb_exec(tsk);
+		if (err || (tsk->t.regs.eax & 0xffff) != 0x004f) {
+			printk(KERN_ERR "uvesafb: Getting mode info block "
+				"for mode 0x%x failed (eax=0x%x, err=%x)\n",
+				*mode, (u32)tsk->t.regs.eax, err);
+			return -EINVAL;
+		}
+
+		mib = (struct vbe_mode_ib*)tsk->buf;
+		mib->mode_id = *mode;
+
+		/* We only want modes that are supported with the current
+		 * hardware configuration, color, graphics and that have
+		 * support for the LFB. */
+		if ((mib->mode_attr & VBE_MODE_MASK) == VBE_MODE_MASK &&
+		     mib->bits_per_pixel >= 8) {
+			off++;
+			printk("got %x: %dx%d\n", *mode, mib->x_res, mib->y_res);
+		} else {
+			par->vbe_modes_cnt--;
+		}
+		mode++;
+		mib->depth = mib->red_len + mib->green_len + mib->blue_len;
+		/* Handle 8bpp modes and modes with broken color component
+		 * lengths. */
+		if (mib->depth == 0 ||
+		    (mib->depth == 24 && mib->bits_per_pixel == 32)) {
+			mib->depth = mib->bits_per_pixel;
+		}
+	}
+
+	return 0;
+}
+
+struct uvesafb_par *par;
 
 static int __init uvesafb_init(void)
 {
 	int err;
 	struct uvesafb_ktask *tsk = NULL;
-	struct vbe_ib ib;
 
 	printk("uvesafb: init\n");
 
+	par = kzalloc(sizeof(struct uvesafb_par), GFP_KERNEL);
 	uvesafb_prep(tsk);
 
 	err = cn_add_callback(&uvesafb_cn_id, "uvesafb", uvesafb_cn_callback);
 	if (err)
 		goto err_out;
 
-	tsk->t.regs.eax = 0x4f00;
-	tsk->t.flags = TF_VBEIB;
-	tsk->t.buf_len = sizeof(struct vbe_ib);
-	tsk->buf = (u8*)&ib;
-
-	if (!uvesafb_exec(tsk)) {
-	    printk("uvesafb: got version %x", ib.vbe_version);
-	}
+	uvesafb_vbe_getinfo(tsk, par);
+	uvesafb_vbe_getmodes(tsk, par);
 
 	return 0;
 err_out:
@@ -137,6 +274,11 @@ err_out:
 static void __exit uvesafb_exit(void)
 {
 	printk("uvesafb: exit\n");
+
+	if (par->vbe_modes)
+		kfree(par->vbe_modes);
+
+	kfree(par);
 
 	cn_del_callback(&uvesafb_cn_id);
 
