@@ -1,3 +1,9 @@
 userspace:
 - support for in-RAM or in-ROM fields in VBEIB
 
+kernelspace:
+- finish driver probe and remove functions
+- finish monitor limits settings
+  - cmdline overrides
+  - check why EDID parsing doesn't work under X
+

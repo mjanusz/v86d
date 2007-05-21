@@ -131,12 +131,28 @@ do {								\
 	}							\
 } while (0)
 
+#define uvesafb_free(task)					\
+do {								\
+	if (task && task->done)					\
+		kfree(task->done);				\
+	if (task) {						\
+		kfree(task);					\
+		task = NULL;					\
+	}							\
+} while(0)
+
 static int uvesafb_exec(struct uvesafb_ktask *tsk);
 
 struct uvesafb_par {
 	struct vbe_ib vbe_ib;
 	struct vbe_mode_ib *vbe_modes;
 	int vbe_modes_cnt;
+
+	int  ypan;			/* 0 - nothing, 1 - ypan, 2 - ywrap */
+	int  pmi_setpal;	/* pmi for palette changes */
+	u16  *pmi_base;		/* protected mode interface location */
+	void (*pmi_start)(void);
+	void (*pmi_pal)(void);
 
 	u8 *vbe_state;
 	int vbe_state_size;
