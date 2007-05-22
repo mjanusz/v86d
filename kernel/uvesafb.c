@@ -15,6 +15,7 @@
 #include <video/vesa.h>
 #include <video/vga.h>
 #include <asm/io.h>
+#include <asm/mtrr.h>
 
 #include "edid.h"
 #include "uvesafb.h"
@@ -98,7 +99,7 @@ static int uvesafb_helper_start(void)
 		NULL,
 	};
 
-	return call_usermodehelper(uvesafb_path, argv, envp, 0);
+	return call_usermodehelper(uvesafb_path, argv, envp, 1);
 }
 
 static int uvesafb_exec(struct uvesafb_ktask *tsk)
@@ -138,10 +139,13 @@ static int uvesafb_exec(struct uvesafb_ktask *tsk)
 	}
 	kfree(m);
 
+	printk("msg sent with %d\n", err);
+	/* FIXME */
 	if (!err)
 		wait_for_completion_timeout(tsk->done, msecs_to_jiffies(10000));
+	printk("done waiting\n");
 
-//	printk("pre-wait-for-completion err: %x\n", err);
+//	printk("wait for completion, pre-err: %x %x\n", err, tsk->done->done);
 	uvfb_tasks[seq] = NULL;
 
 	seq++;
@@ -151,6 +155,406 @@ static int uvesafb_exec(struct uvesafb_ktask *tsk)
 //	printk("done: %x\n", tsk->done->done);
 
 	return (tsk->done->done >= 0) ? 0 : 1;
+}
+
+static int uvesafb_vbe_find_mode(struct uvesafb_par *par,
+	int xres, int yres, int depth, unsigned char flags)
+{
+	int i, match = -1, h = 0, d = 0x7fffffff;
+
+	for (i = 0; i < par->vbe_modes_cnt; i++) {
+		h = abs(par->vbe_modes[i].x_res - xres) +
+		    abs(par->vbe_modes[i].y_res - yres) +
+		    abs(depth - par->vbe_modes[i].depth);
+
+		/* We have an exact match in the terms of resolution
+		 * and depth. */
+		if (h == 0)
+			return i;
+
+		if (h < d || (h == d && par->vbe_modes[i].depth > depth)) {
+			d = h;
+			match = i;
+		}
+	}
+	i = 1;
+
+	if (flags & UVESAFB_NEED_EXACT_DEPTH &&
+		par->vbe_modes[match].depth != depth)
+		i = 0;
+	if (flags & UVESAFB_NEED_EXACT_RES && d > 24)
+		i = 0;
+	if (i != 0)
+		return match;
+	else
+		return -1;
+}
+
+static int uvesafb_setpalette(struct uvesafb_pal_entry *entries, int count,
+			     int start, struct fb_info *info)
+{
+	struct uvesafb_ktask *task;
+	struct uvesafb_par *par = info->par;
+	int i = par->mode_idx;
+	int err = 0;
+
+	/* We support palette modifications for 8 bpp modes only, so
+	 * there can never be more than 256 entries. */
+	if (start + count > 256)
+		return -EINVAL;
+
+	/* Use VGA registers if mode is VGA-compatible. */
+	if (i >= 0 && i < par->vbe_modes_cnt &&
+	    par->vbe_modes[i].mode_attr & VBE_MODE_VGACOMPAT) {
+		for (i = 0; i < count; i++) {
+			outb_p(start + i,        dac_reg);
+			outb_p(entries[i].red,   dac_val);
+			outb_p(entries[i].green, dac_val);
+			outb_p(entries[i].blue,  dac_val);
+		}
+	} else if (par->pmi_setpal) {
+		__asm__ __volatile__(
+		"call *(%%esi)"
+		: /* no return value */
+		: "a" (0x4f09),         /* EAX */
+		  "b" (0),              /* EBX */
+		  "c" (count),          /* ECX */
+		  "d" (start),          /* EDX */
+		  "D" (entries),        /* EDI */
+		  "S" (&par->pmi_pal)); /* ESI */
+	} else {
+		uvesafb_prep(task);
+		task->t.regs.eax = 0x4f09;
+		task->t.regs.ebx = 0x0;
+		task->t.regs.ecx = count;
+		task->t.regs.edx = start;
+		task->t.flags = TF_CALL | TF_BUF_ESDI;
+		task->t.buf_len = sizeof(struct uvesafb_pal_entry) * count;
+		task->buf = (u8*) entries;
+
+		err = uvesafb_exec(task);
+		if ((task->t.regs.eax & 0xffff) != 0x004f)
+			err = 1;
+
+		uvesafb_free(task);
+	}
+	return err;
+}
+
+static int uvesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
+			    unsigned blue, unsigned transp,
+			    struct fb_info *info)
+{
+	struct uvesafb_pal_entry entry;
+	int shift = 16 - info->var.green.length;
+	int err = 0;
+
+	if (regno >= info->cmap.len)
+		return -EINVAL;
+
+	if (info->var.bits_per_pixel == 8) {
+		entry.red   = red   >> shift;
+		entry.green = green >> shift;
+		entry.blue  = blue  >> shift;
+		entry.pad   = 0;
+
+		err = uvesafb_setpalette(&entry, 1, regno, info);
+	} else if (regno < 16) {
+		switch (info->var.bits_per_pixel) {
+		case 16:
+			if (info->var.red.offset == 10) {
+				/* 1:5:5:5 */
+				((u32*) (info->pseudo_palette))[regno] =
+						((red   & 0xf800) >>  1) |
+						((green & 0xf800) >>  6) |
+						((blue  & 0xf800) >> 11);
+			} else {
+				/* 0:5:6:5 */
+				((u32*) (info->pseudo_palette))[regno] =
+						((red   & 0xf800)      ) |
+						((green & 0xfc00) >>  5) |
+						((blue  & 0xf800) >> 11);
+			}
+			break;
+
+		case 24:
+		case 32:
+			red   >>= 8;
+			green >>= 8;
+			blue  >>= 8;
+			((u32 *)(info->pseudo_palette))[regno] =
+				(red   << info->var.red.offset)   |
+				(green << info->var.green.offset) |
+				(blue  << info->var.blue.offset);
+			break;
+		}
+	}
+	return err;
+}
+
+static int uvesafb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
+{
+	struct uvesafb_pal_entry *entries;
+	int shift = 16 - info->var.green.length;
+	int i, err = 0;
+
+	if (info->var.bits_per_pixel == 8) {
+		if (cmap->start + cmap->len > info->cmap.start +
+		    info->cmap.len || cmap->start < info->cmap.start)
+			return -EINVAL;
+
+		entries = vmalloc(sizeof(struct vesafb_pal_entry) * cmap->len);
+		if (!entries)
+			return -ENOMEM;
+		for (i = 0; i < cmap->len; i++) {
+			entries[i].red   = cmap->red[i]   >> shift;
+			entries[i].green = cmap->green[i] >> shift;
+			entries[i].blue  = cmap->blue[i]  >> shift;
+			entries[i].pad   = 0;
+		}
+		err = uvesafb_setpalette(entries, cmap->len, cmap->start, info);
+		vfree(entries);
+	} else {
+		/* For modes with bpp > 8, we only set the pseudo palette in
+		 * the fb_info struct. We rely on vesafb_setcolreg to do all
+		 * sanity checking. */
+		for (i = 0; i < cmap->len; i++) {
+			err |= uvesafb_setcolreg(cmap->start + i, cmap->red[i],
+				cmap->green[i], cmap->blue[i],
+				0, info);
+		}
+	}
+	return err;
+}
+
+static int uvesafb_set_par(struct fb_info *info)
+{
+	struct uvesafb_par *par = info->par;
+	struct uvesafb_ktask *task = NULL;
+	struct vbe_crtc_ib *crtc = NULL;
+	struct vbe_mode_ib *mode = NULL;
+	int i, err = 0, depth = info->var.bits_per_pixel;
+
+	if (depth > 8 && depth != 32)
+		depth = info->var.red.length + info->var.green.length +
+			info->var.blue.length;
+
+	i = uvesafb_vbe_find_mode(par, info->var.xres, info->var.yres, depth,
+				 UVESAFB_NEED_EXACT_RES |
+				 UVESAFB_NEED_EXACT_DEPTH);
+	if (i >= 0)
+		mode = &par->vbe_modes[i];
+	else
+		return -EINVAL;
+
+	uvesafb_prep(task);
+	task->t.regs.eax = 0x4f02;
+	task->t.regs.ebx = mode->mode_id | 0x4000;	/* use LFB */
+	task->t.flags = 0;
+	
+	printk("mode id: %x\n", task->t.regs.ebx);
+
+	if (par->vbe_ib.vbe_version >= 0x0300 && !par->nocrtc &&
+	    info->var.pixclock != 0) {
+		task->t.regs.ebx |= 0x0800; 		/* use CRTC data */
+		task->t.flags = TF_BUF_ESDI;
+		crtc = kzalloc(sizeof(struct vbe_crtc_ib), GFP_KERNEL);
+		if (!crtc) {
+			err = -ENOMEM;
+			goto out;
+		}
+		crtc->horiz_start = info->var.xres + info->var.right_margin;
+		crtc->horiz_end	  = crtc->horiz_start + info->var.hsync_len;
+		crtc->horiz_total = crtc->horiz_end + info->var.left_margin;
+
+		crtc->vert_start  = info->var.yres + info->var.lower_margin;
+		crtc->vert_end    = crtc->vert_start + info->var.vsync_len;
+		crtc->vert_total  = crtc->vert_end + info->var.upper_margin;
+
+		crtc->pixel_clock = PICOS2KHZ(info->var.pixclock) * 1000;
+		crtc->refresh_rate = (u16)(100 * (crtc->pixel_clock /
+				     (crtc->vert_total * crtc->horiz_total)));
+		crtc->flags = 0;
+
+		if (info->var.vmode & FB_VMODE_DOUBLE)
+			crtc->flags |= 0x1;
+		if (info->var.vmode & FB_VMODE_INTERLACED)
+			crtc->flags |= 0x2;
+		if (!(info->var.sync & FB_SYNC_HOR_HIGH_ACT))
+			crtc->flags |= 0x4;
+		if (!(info->var.sync & FB_SYNC_VERT_HIGH_ACT))
+			crtc->flags |= 0x8;
+		memcpy(&par->crtc, crtc, sizeof(struct vbe_crtc_ib));
+	} else
+		memset(&par->crtc, 0, sizeof(struct vbe_crtc_ib));
+
+	task->t.buf_len = sizeof(struct vbe_crtc_ib);
+	task->buf = (u8*) &par->crtc;
+
+	err = uvesafb_exec(task);
+	if (err || (task->t.regs.eax & 0xffff) != 0x004f) {
+		printk(KERN_ERR "uvesafb: mode switch failed (eax: 0x%lx, err %x)\n",
+				task->t.regs.eax, err);
+		err = -EINVAL;
+		goto out;
+	}
+	par->mode_idx = i;
+
+	/* For 8bpp modes, always try to set the DAC to 8 bits. */
+	if (par->vbe_ib.capabilities & VBE_CAP_CAN_SWITCH_DAC &&
+	    mode->bits_per_pixel <= 8) {
+		uvesafb_reset(task);
+		task->t.regs.eax = 0x4f08;
+		task->t.regs.ebx = 0x0800;
+
+		err = uvesafb_exec(task);
+		if (err || (task->t.regs.eax & 0xffff) != 0x004f ||
+		    ((task->t.regs.ebx & 0xff00) >> 8) != 8) {
+			/* We've failed to set the DAC palette format -
+			 * time to correct var. */
+			info->var.red.length    = 6;
+			info->var.green.length  = 6;
+			info->var.blue.length   = 6;
+		}
+	}
+
+	info->fix.visual = (info->var.bits_per_pixel == 8) ?
+		           FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_TRUECOLOR;
+	info->fix.line_length = mode->bytes_per_scan_line;
+
+out:	if (crtc != NULL)
+		kfree(crtc);
+	uvesafb_free(task);
+
+	return err;
+}
+
+static void uvesafb_setup_var(struct fb_var_screeninfo *var, struct fb_info *info,
+	struct vbe_mode_ib *mode)
+{
+	struct uvesafb_par *par = (struct uvesafb_par*)info->par;
+
+	printk("setup var: %d %d %d\n", mode->x_res, mode->y_res, mode->bytes_per_scan_line);
+
+	var->xres = mode->x_res;
+	var->yres = mode->y_res;
+	var->xres_virtual = mode->x_res;
+	var->yres_virtual = (par->ypan) ?
+			      info->fix.smem_len / mode->bytes_per_scan_line :
+			      mode->y_res;
+	var->xoffset = 0;
+	var->yoffset = 0;
+	var->bits_per_pixel = mode->bits_per_pixel;
+
+	if (var->bits_per_pixel == 15)
+		var->bits_per_pixel = 16;
+
+	if (var->bits_per_pixel > 8) {
+		var->red.offset    = mode->red_off;
+		var->red.length    = mode->red_len;
+		var->green.offset  = mode->green_off;
+		var->green.length  = mode->green_len;
+		var->blue.offset   = mode->blue_off;
+		var->blue.length   = mode->blue_len;
+		var->transp.offset = mode->rsvd_off;
+		var->transp.length = mode->rsvd_len;
+
+		DPRINTK("directcolor: size=%d:%d:%d:%d, shift=%d:%d:%d:%d\n",
+			mode->rsvd_len,
+			mode->red_len,
+			mode->green_len,
+			mode->blue_len,
+			mode->rsvd_off,
+			mode->red_off,
+			mode->green_off,
+			mode->blue_off);
+	} else {
+		var->red.offset    = 0;
+		var->green.offset  = 0;
+		var->blue.offset   = 0;
+		var->transp.offset = 0;
+
+		/* We're assuming that we can switch the DAC to 8 bits. If
+		 * this proves to be incorrect, we'll update the fields
+		 * later in set_par(). */
+		if (par->vbe_ib.capabilities & VBE_CAP_CAN_SWITCH_DAC) {
+			var->red.length    = 8;
+			var->green.length  = 8;
+			var->blue.length   = 8;
+			var->transp.length = 0;
+		} else {
+			var->red.length    = 6;
+			var->green.length  = 6;
+			var->blue.length   = 6;
+			var->transp.length = 0;
+		}
+	}
+}
+
+static void inline uvesafb_check_limits(struct fb_var_screeninfo *var,
+	struct fb_info *info)
+{
+	const struct fb_videomode *mode;
+	struct uvesafb_par *par = info->par;
+
+	/* If pixclock is set to 0, then we're using default BIOS timings
+	 * and thus don't have to perform any checks here. */
+	if (!var->pixclock)
+		return;
+	if (par->vbe_ib.vbe_version < 0x0300) {
+		fb_get_mode(FB_VSYNCTIMINGS | FB_IGNOREMON, 60, var, info);
+		return;
+	}
+	if (!fb_validate_mode(var, info))
+		return;
+	mode = fb_find_best_mode(var, &info->modelist);
+	if (mode) {
+		if (mode->xres == var->xres && mode->yres == var->yres &&
+		    !(mode->vmode & (FB_VMODE_INTERLACED | FB_VMODE_DOUBLE))) {
+			fb_videomode_to_var(var, mode);
+			return;
+		}
+	}
+	if (info->monspecs.gtf && !fb_get_mode(FB_MAXTIMINGS, 0, var, info))
+		return;
+	/* Use default refresh rate */
+	var->pixclock = 0;
+}
+
+static int uvesafb_check_var(struct fb_var_screeninfo *var,
+			    struct fb_info *info)
+{
+	struct uvesafb_par *par = info->par;
+	int match = -1;
+	int depth = var->red.length + var->green.length + var->blue.length;
+
+	/* Various apps will use bits_per_pixel to set the color depth,
+	 * which is theoretically incorrect, but which we'll try to handle
+	 * here. */
+	if (depth == 0 || abs(depth - var->bits_per_pixel) >= 8)
+		depth = var->bits_per_pixel;
+	match = uvesafb_vbe_find_mode(par, var->xres, var->yres, depth,
+			UVESAFB_NEED_EXACT_RES);
+
+	if (match == -1)
+		return -EINVAL;
+
+	uvesafb_setup_var(var, info, &par->vbe_modes[match]);
+
+	/* Check whether we have remapped enough memory for this mode. */
+	if (var->yres * par->vbe_modes[match].bytes_per_scan_line >
+	    info->fix.smem_len) {
+		return -EINVAL;
+	}
+
+	if ((var->vmode & FB_VMODE_DOUBLE) &&
+	    !(par->vbe_modes[match].mode_attr & 0x100))
+		var->vmode &= ~FB_VMODE_DOUBLE;
+	if ((var->vmode & FB_VMODE_INTERLACED) &&
+	    !(par->vbe_modes[match].mode_attr & 0x200))
+		var->vmode &= ~FB_VMODE_INTERLACED;
+	uvesafb_check_limits(var, info);
+	return 0;
 }
 
 static int __devinit inline uvesafb_vbe_getinfo(struct uvesafb_ktask *tsk,
@@ -252,7 +656,7 @@ static int __devinit inline uvesafb_vbe_getmodes(struct uvesafb_ktask *tsk,
 		tsk->t.regs.ecx = (u32) *mode;
 		tsk->t.flags = TF_BUF_RET | TF_BUF_ESDI;
 		tsk->t.buf_len = sizeof(struct vbe_mode_ib);
-		tsk->buf = (u8*) par->vbe_modes + off;
+		tsk->buf = (u8*) (par->vbe_modes + off);
 
 		err = uvesafb_exec(tsk);
 		if (err || (tsk->t.regs.eax & 0xffff) != 0x004f) {
@@ -303,19 +707,23 @@ static int __devinit inline uvesafb_vbe_getpmi(struct uvesafb_ktask *tsk,
 	if ((tsk->t.regs.eax & 0xffff) != 0x004f || tsk->t.regs.es < 0xc000) {
 		par->pmi_setpal = par->ypan = 0;
 	} else {
-		par->pmi_base  = (u16*)phys_to_virt(((u32)tsk->t.regs.es << 4) +
-			     tsk->t.regs.edi);
-		par->pmi_start = (void*)((char*)par->pmi_base + par->pmi_base[1]);
-		par->pmi_pal   = (void*)((char*)par->pmi_base + par->pmi_base[2]);
+		par->pmi_base  = (u16*)phys_to_virt(((u32)tsk->t.regs.es << 4) 
+				+ tsk->t.regs.edi);
+		par->pmi_start = (void*)((char*)par->pmi_base +
+				par->pmi_base[1]);
+		par->pmi_pal   = (void*)((char*)par->pmi_base +
+				par->pmi_base[2]);
 		printk(KERN_INFO "uvesafb: protected mode interface info at "
 				 "%04x:%04x\n",
 				 (u16)tsk->t.regs.es, (u16)tsk->t.regs.edi);
 		printk(KERN_INFO "uvesafb: pmi: set display start = %p, "
-				 "set palette = %p\n", par->pmi_start, par->pmi_pal);
+				 "set palette = %p\n", par->pmi_start,
+				 par->pmi_pal);
 
 		if (par->pmi_base[3]) {
 			printk(KERN_INFO "uvesafb: pmi: ports = ");
-			for (i = par->pmi_base[3]/2; par->pmi_base[i] != 0xffff; i++)
+			for (i = par->pmi_base[3]/2;
+				par->pmi_base[i] != 0xffff; i++)
 				printk("%x ", par->pmi_base[i]);
 			printk("\n");
 
@@ -440,7 +848,7 @@ static void __devinit inline
 		/* Add all VESA video modes to our modelist. */
 		fb_videomode_to_modelist((struct fb_videomode *)vesa_modes,
 					 VESA_MODEDB_SIZE, &info->modelist);
-		printk(KERN_INFO "vesafb: no monitor limits have been set\n");
+		printk(KERN_INFO "uvesafb: no monitor limits have been set\n");
 	}
 	return;
 }
@@ -457,6 +865,7 @@ static int __devinit inline vesafb_vbe_init(struct fb_info *info)
 		goto out;
 	if ((err = uvesafb_vbe_getmodes(task, par)))
 		goto out;
+	par->nocrtc = nocrtc;
 #ifdef __i386__
 	par->pmi_setpal = pmi_setpal;
 	par->ypan = ypan;
@@ -476,29 +885,340 @@ out:	uvesafb_free(task);
 	return err;
 }
 
+/* FIXME: export decode_mode? from fbdev core */
+static int __devinit decode_mode(u32 *xres, u32 *yres, u32 *bpp, u32 *refresh)
+{
+	int len = strlen(mode_option), i, err = 0;
+	u8 res_specified = 0, bpp_specified = 0, refresh_specified = 0,
+	   yres_specified = 0;
+
+	for (i = len-1; i >= 0; i--) {
+		switch (mode_option[i]) {
+		case '@':
+			len = i;
+			if (!refresh_specified && !bpp_specified &&
+			    !yres_specified) {
+				*refresh = simple_strtoul(&mode_option[i+1],
+							  NULL, 0);
+				refresh_specified = 1;
+			} else
+				goto out;
+			break;
+		case '-':
+			len = i;
+			if (!bpp_specified && !yres_specified) {
+				*bpp = simple_strtoul(&mode_option[i+1],
+						      NULL, 0);
+				bpp_specified = 1;
+			} else
+				goto out;
+			break;
+		case 'x':
+			if (!yres_specified) {
+				*yres = simple_strtoul(&mode_option[i+1],
+						       NULL, 0);
+				yres_specified = 1;
+			} else
+				goto out;
+			break;
+		case '0'...'9':
+			break;
+		default:
+			goto out;
+		}
+	}
+
+	if (i < 0 && yres_specified) {
+		*xres = simple_strtoul(mode_option, NULL, 0);
+		res_specified = 1;
+	}
+
+out:	if (!res_specified || !yres_specified) {
+		printk(KERN_ERR "uvesafb: invalid resolution, "
+				"%s not specified\n",
+				(!res_specified) ? "width" : "height");
+		err = -EINVAL;
+	}
+
+	return err;
+}
+
+static int __devinit uvesafb_vbe_init_mode(struct fb_info *info)
+{
+	struct fb_videomode mode;
+	struct uvesafb_par *par = info->par;
+	int i, modeid, refresh = 0;
+	u8 refresh_specified = 0;
+
+	if (!mode_option)
+		mode_option = CONFIG_FB_VESA_DEFAULT_MODE;
+
+	/* Has the user requested a specific VESA mode? */
+	if (vbemode) {
+		for (i = 0; i < par->vbe_modes_cnt; i++) {
+			if (par->vbe_modes[i].mode_id == vbemode) {
+				info->var.vmode = FB_VMODE_NONINTERLACED;
+				info->var.sync = FB_SYNC_VERT_HIGH_ACT;
+				uvesafb_setup_var(&info->var, info,
+						 &par->vbe_modes[i]);
+				fb_get_mode(FB_VSYNCTIMINGS | FB_IGNOREMON,
+					    60, &info->var, info);
+				/* With pixclock set to 0, the default BIOS
+				 * timings will be used in set_par(). */
+				info->var.pixclock = 0;
+				modeid = i;
+				goto out;
+			}
+		}
+		printk(KERN_INFO "uvesafb: requested VBE mode 0x%x is unavailable\n",
+				 vbemode);
+		vbemode = 0;
+	}
+
+	/* Decode the mode specified on the kernel command line. We save
+	 * the depth into bits_per_pixel, which is wrong, but will work
+	 * anyway. */
+	if (decode_mode(&info->var.xres, &info->var.yres,
+			&info->var.bits_per_pixel, &refresh))
+		return -EINVAL;
+	if (refresh)
+		refresh_specified = 1;
+	else
+		refresh = 60;
+
+	/* Look for a matching VBE mode. We can live if an exact match
+	 * cannot be found. */
+	modeid = uvesafb_vbe_find_mode(par, info->var.xres, info->var.yres,
+		info->var.bits_per_pixel, 0);
+
+	printk("got mode %x\n", modeid);
+
+	if (modeid == -1) {
+		return -EINVAL;
+	} else {
+		info->var.vmode = FB_VMODE_NONINTERLACED;
+		info->var.sync = FB_SYNC_VERT_HIGH_ACT;
+		uvesafb_setup_var(&info->var, info, &par->vbe_modes[modeid]);
+	}
+
+	/* If we are not VBE3.0+ compliant, we're done -- the BIOS will
+	 * ignore our mode timings anyway. */
+	if (par->vbe_ib.vbe_version < 0x0300) {
+		fb_get_mode(FB_VSYNCTIMINGS | FB_IGNOREMON, 60,
+			    &info->var, info);
+		goto out;
+	}
+
+	/* If the user isn't forcing us to use the GTF, try to find mode
+	 * timings in our database. */
+	if (!gtf) {
+		struct fb_videomode tmode;
+		const struct fb_videomode *fbmode;
+
+		/* Try to find a closest match if the user requested a
+		 * specific refresh rate. Otherwise, just use the best
+		 * refresh rate we have. */
+		if (refresh_specified) {
+			fb_var_to_videomode(&tmode, &info->var);
+			tmode.refresh = refresh;
+			fbmode = fb_find_nearest_mode(&tmode,
+						      &info->modelist);
+		} else {
+			fbmode = fb_find_best_mode(&info->var,
+						   &info->modelist);
+		}
+
+		/* If the mode we found has the same resolution and the
+		 * difference between its refresh rate and the requested
+		 * refresh rate is smaller than 5 Hz, we're done. */
+		if (fbmode->xres == info->var.xres &&
+		    fbmode->yres == info->var.yres &&
+		    !(fbmode->vmode & (FB_VMODE_INTERLACED | FB_VMODE_DOUBLE))
+		    && (!refresh_specified ||
+			abs(refresh - fbmode->refresh) <= 5))
+		{
+			fb_videomode_to_var(&info->var, fbmode);
+			return modeid;
+		}
+	}
+
+	i = FB_MAXTIMINGS;
+	if (!info->monspecs.gtf)
+		i = FB_IGNOREMON | FB_VSYNCTIMINGS;
+	else if (refresh_specified)
+		i = FB_VSYNCTIMINGS;
+
+	/* If GTF gets us a good mode, we're done. */
+	if (!fb_get_mode(i, refresh, &info->var, info))
+		goto out;
+
+	/* Otherwise, just try a mode with the highest refresh
+	 * rate compatible with the monitor limits. */
+	if (info->monspecs.gtf &&
+	    !fb_get_mode(FB_MAXTIMINGS, 0, &info->var, info))
+		goto out;
+
+	/* If all else failed, use the default refresh rate. */
+	printk(KERN_WARNING "uvesafb: using default refresh rate from BIOS\n");
+	info->var.pixclock = 0;
+out:
+	fb_var_to_videomode(&mode, &info->var);
+	fb_add_videomode(&mode, &info->modelist);
+	return modeid;
+}
+
 static struct fb_ops uvesafb_ops = {
 	.owner		= THIS_MODULE,
 /*	.fb_open	= uvesafb_open,
 	.fb_release	= uvesafb_release,
-	.fb_setcolreg	= uvesafb_setcolreg,
+*/	.fb_setcolreg	= uvesafb_setcolreg,
 	.fb_setcmap	= uvesafb_setcmap,
-	.fb_pan_display	= uvesafb_pan_display,
+/*	.fb_pan_display	= uvesafb_pan_display,
 	.fb_blank       = uvesafb_blank,
 */	.fb_fillrect	= cfb_fillrect,
 	.fb_copyarea	= cfb_copyarea,
 	.fb_imageblit	= cfb_imageblit,
-/*	.fb_check_var	= uvesafb_check_var,
-	.fb_set_par	= uvesafb_set_par*/
+	.fb_check_var	= uvesafb_check_var,
+	.fb_set_par	= uvesafb_set_par,
 };
+
+static void __devinit uvesafb_init_info(struct fb_info *info, struct vbe_mode_ib *mode)
+{
+	unsigned int size_vmode;
+	unsigned int size_remap;
+	unsigned int size_total;
+	struct uvesafb_par *par = info->par;
+	int i, h;
+
+	info->pseudo_palette = ((u8*)info->par + sizeof(struct uvesafb_par));
+	info->fbops = &uvesafb_ops;
+	info->fix = uvesafb_fix;
+	info->fix.ypanstep = par->ypan ? 1 : 0;
+	info->fix.ywrapstep = (par->ypan > 1) ? 1 : 0;
+
+	/* Disable blanking if the user requested so. */
+	if (!blank) {
+		info->fbops->fb_blank = NULL;
+	}
+
+	/* Find out how much IO memory is required for the mode with
+	 * the highest resolution. */
+	size_remap = 0;
+	for (i = 0; i < par->vbe_modes_cnt; i++) {
+		h = par->vbe_modes[i].bytes_per_scan_line * par->vbe_modes[i].y_res;
+		if (h > size_remap)
+			size_remap = h;
+	}
+	size_remap *= 2;
+
+	/*   size_vmode -- that is the amount of memory needed for the
+	 *                 used video mode, i.e. the minimum amount of
+	 *                 memory we need. */
+	if (mode != NULL) {
+		size_vmode = info->var.yres * mode->bytes_per_scan_line;
+	} else {
+		size_vmode = info->var.yres * info->var.xres *
+			     ((info->var.bits_per_pixel + 7) >> 3);
+	}
+
+	/*   size_total -- all video memory we have. Used for mtrr
+	 *                 entries, resource allocation and bounds
+	 *                 checking. */
+	size_total = par->vbe_ib.total_memory * 65536;
+	if (vram_total)
+		size_total = vram_total * 1024 * 1024;
+	if (size_total < size_vmode)
+		size_total = size_vmode;
+
+	/*   size_remap -- the amount of video memory we are going to
+	 *                 use for vesafb.  With modern cards it is no
+	 *                 option to simply use size_total as th
+	 *                 wastes plenty of kernel address space. */
+	if (vram_remap)
+		size_remap = vram_remap * 1024 * 1024;
+	if (size_remap < size_vmode)
+		size_remap = size_vmode;
+	if (size_remap > size_total)
+		size_remap = size_total;
+
+	info->fix.smem_len = size_remap;
+	info->fix.smem_start = mode->phys_base_ptr;
+
+	/* We have to set yres_virtual here because when setup_var() was
+	 * called, smem_len wasn't defined yet. */
+
+	printk("bytes_per_scan_line: %d\n", mode->bytes_per_scan_line);
+
+	info->var.yres_virtual = info->fix.smem_len /
+				 mode->bytes_per_scan_line;
+
+	if (par->ypan && info->var.yres_virtual > info->var.yres) {
+		printk(KERN_INFO "uvesafb: scrolling: %s "
+		       "using protected mode interface, "
+		       "yres_virtual=%d\n",
+		       (par->ypan > 1) ? "ywrap" : "ypan", info->var.yres_virtual);
+	} else {
+		printk(KERN_INFO "uvesafb: scrolling: redraw\n");
+		info->var.yres_virtual = info->var.yres;
+		par->ypan = 0;
+	}
+
+	info->flags = FBINFO_FLAG_DEFAULT | 
+		(par->ypan) ? FBINFO_HWACCEL_YPAN : 0;
+
+	if (!par->ypan)
+		info->fbops->fb_pan_display = NULL;
+}
+
+static void uvesafb_init_mtrr(struct fb_info *info)
+{
+#ifdef CONFIG_MTRR
+	if (mtrr && !(info->fix.smem_start & (PAGE_SIZE - 1))) {
+		int temp_size = info->fix.smem_len;
+		unsigned int type = 0;
+
+		switch (mtrr) {
+		case 1:
+			type = MTRR_TYPE_UNCACHABLE;
+			break;
+		case 2:
+			type = MTRR_TYPE_WRBACK;
+			break;
+		case 3:
+			type = MTRR_TYPE_WRCOMB;
+			break;
+		case 4:
+			type = MTRR_TYPE_WRTHROUGH;
+			break;
+		default:
+			type = 0;
+			break;
+		}
+
+		if (type) {
+			int rc;
+
+			/* Find the largest power-of-two */
+			while (temp_size & (temp_size - 1))
+				temp_size &= (temp_size - 1);
+
+			/* Try and find a power of two to add */
+			do {
+				rc = mtrr_add(info->fix.smem_start,
+					      temp_size, type, 1);
+				temp_size >>= 1;
+			} while (temp_size >= PAGE_SIZE && rc == -EINVAL);
+		}
+	}
+#endif /* CONFIG_MTRR */
+}
 
 static int __devinit uvesafb_probe(struct platform_device *dev)
 {
 	struct fb_info *info;
+	struct vbe_mode_ib *mode = NULL;
 	struct uvesafb_par *par;
-	int err = 0;
-	unsigned int size_vmode;
-	unsigned int size_remap;
-	unsigned int size_total;
+	int err = 0, i;
 
 	info = framebuffer_alloc(sizeof(struct uvesafb_par) +
 				sizeof(u32) * 256, &dev->dev);
@@ -512,22 +1232,72 @@ static int __devinit uvesafb_probe(struct platform_device *dev)
 		goto out;
 	}
 
-	uvesafb_fix.ypanstep  = par->ypan ? 1 : 0;
-	uvesafb_fix.ywrapstep = (par->ypan > 1) ? 1 : 0;
-
-	info->pseudo_palette = ((u8*)info->par + sizeof(struct uvesafb_par));
-	info->fbops = &uvesafb_ops;
 	info->var = uvesafb_defined;
-	info->fix = uvesafb_fix;
+	i = uvesafb_vbe_init_mode(info);
+	if (i < 0) {
+		err = -EINVAL;
+		goto out;
+	} else
+		mode = &par->vbe_modes[i];
 
 	if (fb_alloc_cmap(&info->cmap, 256, 0) < 0) {
 		err = -ENXIO;
 		goto out;
 	}
 
+	uvesafb_init_info(info, mode);
+
+	if (!request_mem_region(info->fix.smem_start, info->fix.smem_len,
+		"uvesafb"))
+	{
+		printk(KERN_WARNING "uvesafb: cannot reserve video memory at "
+		       "0x%lx\n", info->fix.smem_start);
+		/* We cannot make this fatal. Sometimes this comes from magic
+		   spaces our resource handlers simply don't know about. */
+	}
+
+	info->screen_base = ioremap(info->fix.smem_start, info->fix.smem_len);
+
+	if (!info->screen_base) {
+		printk(KERN_ERR
+		       "uvesafb: abort, cannot ioremap 0x%x bytes of video "
+		       "memory at 0x%lx\n",
+		       info->fix.smem_len, info->fix.smem_start);
+		err = -EIO;
+		goto out_mem;
+	}
+
+	/* Request failure does not faze us, as vgacon probably has this
+	   region already (FIXME) */
+	request_region(0x3c0, 32, "uvesafb");
+
+	uvesafb_init_mtrr(info);
 	platform_set_drvdata(dev, info);
+
+	if (register_framebuffer(info) < 0) {
+		printk(KERN_ERR
+		       "uvesafb: failed to register framebuffer device\n");
+		err = -EINVAL;
+		goto out_unmap;
+	}
+
+	printk(KERN_INFO "uvesafb: framebuffer at 0x%lx, mapped to 0x%p, "
+	       "using %dk, total %dk\n", info->fix.smem_start,
+	       info->screen_base, info->fix.smem_len/1024,
+	       par->vbe_ib.total_memory * 64);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n", info->node,
+	       info->fix.id);
+
 	return 0;
 
+out_unmap:
+	iounmap(info->screen_base);
+out_mem:
+	release_mem_region(info->fix.smem_start, info->fix.smem_len);
+	if (!list_empty(&info->modelist))
+		fb_destroy_modelist(&info->modelist);
+	fb_destroy_modedb(info->monspecs.modedb);
+	fb_dealloc_cmap(&info->cmap);
 out:
 	if (par->vbe_modes)
 		kfree(par->vbe_modes);
@@ -542,7 +1312,15 @@ static int uvesafb_remove(struct platform_device *dev)
 
 	if (info) {
 		struct uvesafb_par *par = (struct uvesafb_par*) info->par;
-//		unregister_framebuffer(info);
+		unregister_framebuffer(info);
+
+		iounmap(info->screen_base);
+		release_mem_region(info->fix.smem_start, info->fix.smem_len);
+		if (!list_empty(&info->modelist))
+			fb_destroy_modelist(&info->modelist);
+		fb_destroy_modedb(info->monspecs.modedb);
+		fb_dealloc_cmap(&info->cmap);
+
 		if (par && par->vbe_modes)
 			kfree(par->vbe_modes);
 

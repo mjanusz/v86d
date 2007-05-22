@@ -52,9 +52,9 @@ int req_exec(int s, struct cn_msg *msg)
 	u8 *buf = (u8*)tsk + sizeof(struct uvesafb_task);
 	int i;
 
-	ulog("performing request\n");
+//	ulog("performing request\n");
 	v86_task(tsk, buf);
-	ulog("request done\n");
+//	ulog("request done\n");
 	netlink_send(s, msg);
 
 	return 0;

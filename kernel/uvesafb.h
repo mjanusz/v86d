@@ -110,6 +110,9 @@ struct vbe_mode_ib {
 
 #ifdef __KERNEL__
 
+#define dac_reg	(0x3c8)
+#define dac_val	(0x3c9)
+
 struct uvesafb_pal_entry {
 	u_char blue, green, red, pad;
 } __attribute__ ((packed));
@@ -131,6 +134,13 @@ do {								\
 	}							\
 } while (0)
 
+#define uvesafb_reset(task)					\
+do {								\
+	struct completion *cpl = task->done;			\
+	memset(task, 0, sizeof(struct uvesafb_ktask));		\
+	task->done = cpl;					\
+} while(0)							\
+
 #define uvesafb_free(task)					\
 do {								\
 	if (task && task->done)					\
@@ -143,13 +153,17 @@ do {								\
 
 static int uvesafb_exec(struct uvesafb_ktask *tsk);
 
+#define UVESAFB_NEED_EXACT_RES		1
+#define UVESAFB_NEED_EXACT_DEPTH	2
+
 struct uvesafb_par {
 	struct vbe_ib vbe_ib;
 	struct vbe_mode_ib *vbe_modes;
 	int vbe_modes_cnt;
 
-	int  ypan;			/* 0 - nothing, 1 - ypan, 2 - ywrap */
-	int  pmi_setpal;	/* pmi for palette changes */
+	u8 nocrtc;
+	u8 ypan;			/* 0 - nothing, 1 - ypan, 2 - ywrap */
+	u8 pmi_setpal;	/* pmi for palette changes */
 	u16  *pmi_base;		/* protected mode interface location */
 	void (*pmi_start)(void);
 	void (*pmi_pal)(void);
@@ -158,7 +172,6 @@ struct uvesafb_par {
 	int vbe_state_size;
 	atomic_t ref_count;
 
-	u32 mem_total;
 	int mode_idx;
 	struct vbe_crtc_ib crtc;
 };
