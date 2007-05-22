@@ -40,17 +40,21 @@ static struct fb_fix_screeninfo uvesafb_fix __devinitdata = {
 	.accel	= FB_ACCEL_NONE,
 };
 
-static int ypan			= 0; /* 0 - nothing, 1 - ypan, 2 - ywrap */
-static int pmi_setpal		= 1; /* pmi for palette changes */
-static int nocrtc		= 0; /* ignore CRTC settings */
+
+static int mtrr		__devinitdata = 0; /* disable mtrr by default */
+static int blank	__devinitdata = 1; /* enable blanking by default */
+static int ypan		__devinitdata = 0; /* 0 - nothing, 1 - ypan, 2 - ywrap */
+static int pmi_setpal	__devinitdata = 1; /* use PMI for palette changes */
+static int nocrtc	__devinitdata = 0; /* ignore CRTC settings */
 static int noedid       __devinitdata = 0; /* don't try DDC transfers */
 static int vram_remap   __devinitdata = 0; /* set amount of memory to be used */
 static int vram_total   __devinitdata = 0; /* set total amount of memory */
 static u16 maxclk       __devinitdata = 0; /* maximum pixel clock */
 static u16 maxvf        __devinitdata = 0; /* maximum vertical frequency */
 static u16 maxhf        __devinitdata = 0; /* maximum horizontal frequency */
-static int gtf          __devinitdata = 0; /* forces use of the GTF */
-
+static int gtf          __devinitdata = 0; /* force use of the GTF */
+static u16 vbemode      __devinitdata = 0;
+static char *mode_option __devinitdata = NULL;
 
 #define TASKS_MAX 1024
 static struct uvesafb_ktask* uvfb_tasks[TASKS_MAX];
@@ -345,8 +349,6 @@ static int __devinit inline uvesafb_vbe_getedid(struct uvesafb_ktask *tsk,
 	if ((tsk->t.regs.eax & 0xffff) != 0x004f || err)
 		return -EINVAL;
 
-	printk(KERN_INFO "uvesafb: got %x\n", tsk->t.regs.ebx);
-
 	if ((tsk->t.regs.ebx & 0x3) == 3) {
 		printk(KERN_INFO "uvesafb: VBIOS/hardware supports both "
 				 "DDC1 and DDC2 transfers\n");
@@ -505,9 +507,8 @@ static int __devinit uvesafb_probe(struct platform_device *dev)
 
 	par = (struct uvesafb_par*)info->par;
 
-	if (vesafb_vbe_init(info)) {
-		printk(KERN_ERR "uvesafb: vbe_init() failed\n");
-		err = -EINVAL;
+	if ((err = vesafb_vbe_init(info))) {
+		printk(KERN_ERR "uvesafb: vbe_init() with %d\n", err);
 		goto out;
 	}
 
@@ -560,10 +561,74 @@ static struct platform_driver uvesafb_driver = {
 
 static struct platform_device *uvesafb_device;
 
+#ifndef MODULE
+static int __devinit uvesafb_setup(char *options)
+{
+	char *this_opt;
+
+	if (!options || !*options)
+		return 0;
+
+	while ((this_opt = strsep(&options, ",")) != NULL) {
+		if (!*this_opt) continue;
+
+		if (!strcmp(this_opt, "redraw"))
+			ypan = 0;
+		else if (!strcmp(this_opt, "ypan"))
+			ypan = 1;
+		else if (!strcmp(this_opt, "ywrap"))
+			ypan = 2;
+		else if (!strcmp(this_opt, "vgapal"))
+			pmi_setpal = 0;
+		else if (!strcmp(this_opt, "pmipal"))
+			pmi_setpal = 1;
+		else if (!strncmp(this_opt, "mtrr:", 5))
+			mtrr = simple_strtoul(this_opt+5, NULL, 0);
+		else if (!strcmp(this_opt, "nomtrr"))
+			mtrr = 0;
+		else if (!strcmp(this_opt, "nocrtc"))
+			nocrtc = 1;
+		else if (!strcmp(this_opt, "noedid"))
+			noedid = 1;
+		else if (!strcmp(this_opt, "noblank"))
+			blank = 0;
+		else if (!strcmp(this_opt, "gtf"))
+			gtf = 1;
+		else if (!strncmp(this_opt, "vtotal:", 7))
+			vram_total = simple_strtoul(this_opt + 7, NULL, 0);
+		else if (!strncmp(this_opt, "vremap:", 7))
+			vram_remap = simple_strtoul(this_opt + 7, NULL, 0);
+		else if (!strncmp(this_opt, "maxhf:", 6))
+			maxhf = simple_strtoul(this_opt + 6, NULL, 0);
+		else if (!strncmp(this_opt, "maxvf:", 6))
+			maxvf = simple_strtoul(this_opt + 6, NULL, 0);
+		else if (!strncmp(this_opt, "maxclk:", 7))
+			maxclk = simple_strtoul(this_opt + 7, NULL, 0);
+		else if (!strncmp(this_opt, "vbemode:", 8))
+			vbemode = simple_strtoul(this_opt + 8, NULL,0);
+		else if (this_opt[0] >= '0' && this_opt[0] <= '9') {
+			mode_option = this_opt;
+		} else {
+			printk(KERN_WARNING
+			       "uvesafb: unrecognized option %s\n", this_opt);
+		}
+	}
+
+	return 0;
+}
+#endif /* !MODULE */
+
 static int __devinit uvesafb_init(void)
 {
 	int err;
 
+#ifndef MODULE
+	char *option = NULL;
+
+	if (fb_get_options("uvesafb", &option))
+		return -ENODEV;
+	uvesafb_setup(option);
+#endif
 	err = cn_add_callback(&uvesafb_cn_id, "uvesafb", uvesafb_cn_callback);
 	if (err)
 		goto err_out;
@@ -590,6 +655,9 @@ err_out:
 	return err;
 }
 
+module_init(uvesafb_init);
+
+#ifdef MODULE
 static void __devexit uvesafb_exit(void)
 {
 	cn_del_callback(&uvesafb_cn_id);
@@ -601,8 +669,67 @@ static void __devexit uvesafb_exit(void)
 		sock_release(nls->sk_socket);
 }
 
-module_init(uvesafb_init);
 module_exit(uvesafb_exit);
+
+static inline int param_get_scroll(char *buffer, struct kernel_param *kp)
+{
+	return 0;
+}
+static inline int param_set_scroll(const char *val, struct kernel_param *kp)
+{
+	ypan = 0;
+
+	if (! strcmp(val, "redraw"))
+		ypan = 0;
+	else if (! strcmp(val, "ypan"))
+		ypan = 1;
+	else if (! strcmp(val, "ywrap"))
+		ypan = 2;
+
+	return 0;
+}
+
+#define param_check_scroll(name, p) __param_check(name, p, void);
+
+module_param_named(scroll, ypan, scroll, 0);
+MODULE_PARM_DESC(scroll, "Scrolling mode, set to 'redraw', "
+	"'ypan' or 'ywrap'");
+module_param_named(vgapal, pmi_setpal, invbool, 0);
+MODULE_PARM_DESC(vgapal, "Set palette using VGA registers");
+module_param_named(pmipal, pmi_setpal, bool, 0);
+MODULE_PARM_DESC(pmipal, "Set palette using PMI calls");
+module_param(mtrr, uint, 0);
+MODULE_PARM_DESC(mtrr, "Memory Type Range Registers setting. "
+	"Use 0 to disable.");
+module_param(blank, bool, 1);
+MODULE_PARM_DESC(blank,"Enable hardware blanking");
+module_param(nocrtc, bool, 0);
+MODULE_PARM_DESC(nocrtc, "Ignore CRTC timings when setting modes");
+module_param(noedid, bool, 0);
+MODULE_PARM_DESC(noedid, "Ignore EDID-provided monitor limits "
+	"when setting modes");
+module_param(gtf, bool, 0);
+MODULE_PARM_DESC(gtf,"Force use of the VESA GTF to calculate mode timings");
+module_param(vram_remap, uint, 0);
+MODULE_PARM_DESC(vram_remap,"Set amount of video memory to be used [MiB]");
+module_param(vram_total, uint, 0);
+MODULE_PARM_DESC(vram_total,"Set total amount of video memoery [MiB]");
+module_param(maxclk, ushort, 0);
+MODULE_PARM_DESC(maxclk,"Maximum pixelclock [MHz], overrides EDID data");
+module_param(maxhf, ushort, 0);
+MODULE_PARM_DESC(maxhf, "Maximum horizontal frequency [kHz], "
+	"overrides EDID data");
+module_param(maxvf, ushort, 0);
+MODULE_PARM_DESC(maxvf, "Maximum vertical frequency [Hz], "
+	"overrides EDID data");
+module_param_named(mode, mode_option, charp, 0);
+MODULE_PARM_DESC(mode, "Specify initial video mode as "
+	"\"<xres>x<yres>[-<bpp>][@<refresh>]\"");
+module_param(vbemode, ushort, 0);
+MODULE_PARM_DESC(vbemode, "VBE mode number to set, "
+	"overrides 'mode' setting");
+
+#endif
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Michal Januszewski <spock@gentoo.org>");
