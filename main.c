@@ -72,11 +72,6 @@ int main(int argc, char *argv[])
 	time_t tm;
 	struct pollfd pfd;
 
-	i = open("/dev/tty1", O_RDWR);
-	dup2(i, 0);
-	dup2(i, 1);
-	dup2(i, 2);
-
 	s = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR);
 	if (s == -1) {
 		perror("socket");
