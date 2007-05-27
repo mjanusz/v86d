@@ -319,6 +319,86 @@ static int uvesafb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 	return err;
 }
 
+static int uvesafb_pan_display(struct fb_var_screeninfo *var,
+		struct fb_info *info)
+{
+	int offset;
+	struct uvesafb_par *par = info->par;
+
+	offset = (var->yoffset * info->fix.line_length + var->xoffset) / 4;
+
+	/* It turns out it's not the best idea to do panning via vm86,
+	 * so we only allow it if we have a PMI. */
+	if (par->pmi_start) {
+		__asm__ __volatile__(
+			"call *(%%edi)"
+			: /* no return value */
+			: "a" (0x4f07),         /* EAX */
+			  "b" (0),              /* EBX */
+			  "c" (offset),         /* ECX */
+			  "d" (offset >> 16),   /* EDX */
+			  "D" (&par->pmi_start));    /* EDI */
+	}
+	return 0;
+}
+
+static int uvesafb_blank(int blank, struct fb_info *info)
+{
+	struct uvesafb_par *par = info->par;
+	struct uvesafb_ktask *task;
+	int err = 1;
+
+	if (par->vbe_ib.capabilities & VBE_CAP_VGACOMPAT) {
+		int loop = 10000;
+		u8 seq = 0, crtc17 = 0;
+
+		if (blank == FB_BLANK_POWERDOWN) {
+			seq = 0x20;
+			crtc17 = 0x00;
+			err = 0;
+		} else {
+			seq = 0x00;
+			crtc17 = 0x80;
+			err = (blank == FB_BLANK_UNBLANK) ? 0 : -EINVAL;
+		}
+
+		vga_wseq(NULL, 0x00, 0x01);
+		seq |= vga_rseq(NULL, 0x01) & ~0x20;
+		vga_wseq(NULL, 0x00, seq);
+
+		crtc17 |= vga_rcrt(NULL, 0x17) & ~0x80;
+		while (loop--);
+		vga_wcrt(NULL, 0x17, crtc17);
+		vga_wseq(NULL, 0x00, 0x03);
+	} else {
+		uvesafb_prep(task);
+		if (!task)
+			return -ENOMEM;
+		task->t.regs.eax = 0x4f10;
+		switch (blank) {
+		case FB_BLANK_UNBLANK:
+			task->t.regs.ebx = 0x0001;
+			break;
+		case FB_BLANK_NORMAL:
+			task->t.regs.ebx = 0x0101;	/* standby */
+			break;
+		case FB_BLANK_POWERDOWN:
+			task->t.regs.ebx = 0x0401;	/* powerdown */
+			break;
+		default:
+			goto out;
+		}
+		task->t.flags = 0;
+
+		err = uvesafb_exec(task);
+		if (!err && (task->t.regs.eax & 0xffff) == 0x004f) {
+			err = 0;
+		}
+out:		uvesafb_free(task);
+	}
+	return err;
+}
+
 static int uvesafb_set_par(struct fb_info *info)
 {
 	struct uvesafb_par *par = info->par;
@@ -1059,9 +1139,9 @@ static struct fb_ops uvesafb_ops = {
 	.fb_release	= uvesafb_release,
 */	.fb_setcolreg	= uvesafb_setcolreg,
 	.fb_setcmap	= uvesafb_setcmap,
-/*	.fb_pan_display	= uvesafb_pan_display,
+	.fb_pan_display	= uvesafb_pan_display,
 	.fb_blank       = uvesafb_blank,
-*/	.fb_fillrect	= cfb_fillrect,
+	.fb_fillrect	= cfb_fillrect,
 	.fb_copyarea	= cfb_copyarea,
 	.fb_imageblit	= cfb_imageblit,
 	.fb_check_var	= uvesafb_check_var,
