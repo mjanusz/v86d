@@ -66,9 +66,6 @@ static void uvesafb_cn_callback(void *data)
 	struct uvesafb_task *utsk = (struct uvesafb_task *)msg->data;
 	struct uvesafb_ktask *tsk;
 
-//	printk("%s: %lu: idx=%x, val=%x, seq=%u, ack=%u, len=%d.\n",
-//	       __func__, jiffies, msg->id.idx, msg->id.val, msg->seq, msg->ack, msg->len);
-
 	if (msg->seq >= TASKS_MAX)
 		return;
 
@@ -139,20 +136,15 @@ static int uvesafb_exec(struct uvesafb_ktask *tsk)
 	}
 	kfree(m);
 
-	printk("msg sent with %d\n", err);
 	/* FIXME */
 	if (!err)
 		wait_for_completion_timeout(tsk->done, msecs_to_jiffies(10000));
-	printk("done waiting\n");
 
-//	printk("wait for completion, pre-err: %x %x\n", err, tsk->done->done);
 	uvfb_tasks[seq] = NULL;
 
 	seq++;
 	if (seq >= TASKS_MAX)
 		seq = 0;
-
-//	printk("done: %x\n", tsk->done->done);
 
 	return (tsk->done->done >= 0) ? 0 : 1;
 }
@@ -351,12 +343,10 @@ static int uvesafb_set_par(struct fb_info *info)
 	task->t.regs.eax = 0x4f02;
 	task->t.regs.ebx = mode->mode_id | 0x4000;	/* use LFB */
 	task->t.flags = 0;
-	
-	printk("mode id: %x\n", task->t.regs.ebx);
 
 	if (par->vbe_ib.vbe_version >= 0x0300 && !par->nocrtc &&
 	    info->var.pixclock != 0) {
-		task->t.regs.ebx |= 0x0800; 		/* use CRTC data */
+		task->t.regs.ebx |= 0x0800;		/* use CRTC data */
 		task->t.flags = TF_BUF_ESDI;
 		crtc = kzalloc(sizeof(struct vbe_crtc_ib), GFP_KERNEL);
 		if (!crtc) {
@@ -433,8 +423,6 @@ static void uvesafb_setup_var(struct fb_var_screeninfo *var, struct fb_info *inf
 	struct vbe_mode_ib *mode)
 {
 	struct uvesafb_par *par = (struct uvesafb_par*)info->par;
-
-	printk("setup var: %d %d %d\n", mode->x_res, mode->y_res, mode->bytes_per_scan_line);
 
 	var->xres = mode->x_res;
 	var->yres = mode->y_res;
@@ -991,8 +979,6 @@ static int __devinit uvesafb_vbe_init_mode(struct fb_info *info)
 	modeid = uvesafb_vbe_find_mode(par, info->var.xres, info->var.yres,
 		info->var.bits_per_pixel, 0);
 
-	printk("got mode %x\n", modeid);
-
 	if (modeid == -1) {
 		return -EINVAL;
 	} else {
@@ -1147,8 +1133,6 @@ static void __devinit uvesafb_init_info(struct fb_info *info, struct vbe_mode_ib
 	/* We have to set yres_virtual here because when setup_var() was
 	 * called, smem_len wasn't defined yet. */
 
-	printk("bytes_per_scan_line: %d\n", mode->bytes_per_scan_line);
-
 	info->var.yres_virtual = info->fix.smem_len /
 				 mode->bytes_per_scan_line;
 
@@ -1228,7 +1212,7 @@ static int __devinit uvesafb_probe(struct platform_device *dev)
 	par = (struct uvesafb_par*)info->par;
 
 	if ((err = vesafb_vbe_init(info))) {
-		printk(KERN_ERR "uvesafb: vbe_init() with %d\n", err);
+		printk(KERN_ERR "uvesafb: vbe_init() failed with %d\n", err);
 		goto out;
 	}
 
