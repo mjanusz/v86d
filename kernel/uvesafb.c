@@ -399,6 +399,115 @@ out:		uvesafb_free(task);
 	return err;
 }
 
+static int uvesafb_open(struct fb_info *info, int user)
+{
+	struct uvesafb_ktask *task = NULL;
+	struct uvesafb_par *par = info->par;
+	int cnt = atomic_read(&par->ref_count);
+	int err = 0;
+
+	if (!cnt) {
+		uvesafb_prep(task);
+		if (!task)
+			goto out;
+
+		/* Get the VBE state buffer size. We want all available
+		 * hardware state data (CL = 0x0f). */
+		task->t.regs.eax = 0x4f04;
+		task->t.regs.ecx = 0x000f;
+		task->t.regs.edx = 0x0000;
+		task->t.flags = 0;
+
+		err = uvesafb_exec(task);
+
+		if (err || (task->t.regs.eax & 0xffff) != 0x004f) {
+			printk(KERN_WARNING "uvesafb: VBE state buffer size "
+				"cannot be determined (eax: 0x%lx, err %d)\n",
+				task->t.regs.eax, err);
+			err = 0;
+		}
+
+		par->vbe_state_size = 64 * (task->t.regs.ebx & 0xffff);
+		par->vbe_state = kzalloc(par->vbe_state_size, GFP_KERNEL);
+		if (!par->vbe_state)
+			goto out;
+
+		uvesafb_reset(task);
+
+		task->t.regs.eax = 0x4f04;
+		task->t.regs.ecx = 0x000f;
+		task->t.regs.edx = 0x0001;
+		task->t.flags = TF_BUF_RET | TF_BUF_ESBX;
+		task->buf = (void*)(par->vbe_state);
+		task->t.buf_len = par->vbe_state_size;
+
+		err = uvesafb_exec(task);
+
+		if (err || (task->t.regs.eax & 0xffff) != 0x004f) {
+			printk(KERN_WARNING "uvesafb: VBE get state call "
+				"failed (eax: 0x%lx, err %d)\n", 
+				task->t.regs.eax, err);
+			goto getstate_failed;
+		}
+	}
+out:
+	atomic_inc(&par->ref_count);
+	if (task)
+		uvesafb_free(task);
+	return 0;
+
+getstate_failed:
+	kfree(par->vbe_state);
+	par->vbe_state = NULL;
+	par->vbe_state_size = 0;
+	goto out;
+}
+
+static int uvesafb_release(struct fb_info *info, int user)
+{
+	struct uvesafb_ktask *task = NULL;
+	struct uvesafb_par *par = info->par;
+	int cnt = atomic_read(&par->ref_count);
+	int err;
+
+	if (!cnt)
+		return -EINVAL;
+
+	if (cnt == 1 && par->vbe_state && par->vbe_state_size) {
+		uvesafb_prep(task);
+		if (!task)
+			goto out;
+
+		task->t.regs.eax = 0x0003;
+		task->t.regs.ebx = 0x0000;
+		task->t.flags = 0;
+
+		err = uvesafb_exec(task);
+		if (err || (task->t.regs.eax & 0xffff) != 0x004f)
+			goto out;
+
+		uvesafb_reset(task);
+		task->t.regs.eax = 0x4f04;
+		task->t.regs.ecx = 0x000f;
+		task->t.regs.edx = 0x0002;
+		task->t.buf_len = par->vbe_state_size;
+		task->t.flags = TF_BUF_ESBX;
+		task->buf = (void*)(par->vbe_state);
+
+		err = uvesafb_exec(task);
+		if (err || (task->t.regs.eax & 0xffff) != 0x004f) {
+			printk(KERN_WARNING "vesafb: VBE state restore call "
+				"failed (eax: 0x%lx, err %d)\n",
+				task->t.regs.eax, err);
+		}
+	}
+out:
+	atomic_dec(&par->ref_count);
+	if (task)
+		uvesafb_free(task);
+	return 0;
+}
+
 static int uvesafb_set_par(struct fb_info *info)
 {
 	struct uvesafb_par *par = info->par;
@@ -1135,9 +1244,9 @@ out:
 
 static struct fb_ops uvesafb_ops = {
 	.owner		= THIS_MODULE,
-/*	.fb_open	= uvesafb_open,
+	.fb_open	= uvesafb_open,
 	.fb_release	= uvesafb_release,
-*/	.fb_setcolreg	= uvesafb_setcolreg,
+	.fb_setcolreg	= uvesafb_setcolreg,
 	.fb_setcmap	= uvesafb_setcmap,
 	.fb_pan_display	= uvesafb_pan_display,
 	.fb_blank       = uvesafb_blank,
