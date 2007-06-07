@@ -118,6 +118,11 @@ out_vbeib:
 			tsk->regs.edi = 0x0000;
 		}
 
+		if (tsk->flags & TF_BUF_ESBX) {
+			tsk->regs.es = (u32)lbuf >> 4;
+			tsk->regs.ebx = 0x0000;
+		}
+
 		if (v86_int(0x10, &tsk->regs) || (tsk->regs.eax & 0xffff) != 0x004f)
 			goto out;
 

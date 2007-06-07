@@ -3,8 +3,6 @@ userspace:
 
 kernelspace:
 - finish driver probe and remove functions
-- finish monitor limits settings
-  - check why EDID parsing doesn't work under X
 - task_prep -> check for failed memory allocations
 
 general:

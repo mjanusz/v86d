@@ -1,11 +1,3 @@
-#include <sys/socket.h>
-#include <sys/poll.h>
-
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
-
-#include <arpa/inet.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -13,6 +5,14 @@
 #include <errno.h>
 #include <time.h>
 #include <fcntl.h>
+
+#include <sys/socket.h>
+#include <sys/poll.h>
+
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+
+#include <arpa/inet.h>
 
 #include "v86.h"
 
@@ -24,7 +24,7 @@ static int netlink_send(int s, struct cn_msg *msg)
 	struct nlmsghdr *nlh;
 	unsigned int size;
 	int err;
-	char buf[1024];
+	char buf[CONNECTOR_MAX_MSG_SIZE];
 	struct cn_msg *m;
 
 	size = NLMSG_SPACE(sizeof(struct cn_msg) + msg->len);
@@ -52,9 +52,7 @@ int req_exec(int s, struct cn_msg *msg)
 	u8 *buf = (u8*)tsk + sizeof(struct uvesafb_task);
 	int i;
 
-//	ulog("performing request\n");
 	v86_task(tsk, buf);
-//	ulog("request done\n");
 	netlink_send(s, msg);
 
 	return 0;
@@ -64,13 +62,15 @@ int req_exec(int s, struct cn_msg *msg)
 int main(int argc, char *argv[])
 {
 	int s;
-	char buf[1024];
+	char buf[CONNECTOR_MAX_MSG_SIZE];
 	int len, i;
 	struct nlmsghdr *reply;
 	struct sockaddr_nl l_local;
 	struct cn_msg *data;
 	time_t tm;
 	struct pollfd pfd;
+
+	FILE *fout;
 
 	s = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR);
 	if (s == -1) {
@@ -95,6 +95,8 @@ int main(int argc, char *argv[])
 
 	setsid();
 	chdir("/");
+
+	openlog("v86d", 0, LOG_KERN);
 
 	if (v86_init())
 		return -1;
@@ -151,6 +153,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	closelog();
 	close(s);
 	return 0;
 }
