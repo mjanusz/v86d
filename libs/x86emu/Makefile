@@ -1,0 +1,11 @@
+OBJS = decode.o fpu.o ops.o ops2.o prim_ops.o sys.o
+
+libx86emu.a: $(OBJS)
+	ar rv $@ $+
+
+CFLAGS += -I. -I../../include -I../../include/x86emu
+CFLAGS += -D__DRIVER__ -DFORCE_POST
+
+clean:
+	rm -f *.a *.o
+

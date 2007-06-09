@@ -24,6 +24,8 @@ static struct cb_id uvesafb_cn_id = { .idx = CN_IDX_UVESAFB, .val = CN_VAL_UVESA
 static struct sock *nls;
 static char uvesafb_path[] = "/devel/fbdev/uvesafb/v86d";
 
+#define UVESAFB_TIMEOUT 1000
+
 static struct fb_var_screeninfo uvesafb_defined __devinitdata = {
 	.activate	= FB_ACTIVATE_NOW,
 	.height		= 0,
@@ -138,7 +140,7 @@ static int uvesafb_exec(struct uvesafb_ktask *tsk)
 
 	/* FIXME */
 	if (!err)
-		wait_for_completion_timeout(tsk->done, msecs_to_jiffies(10000));
+		wait_for_completion_timeout(tsk->done, msecs_to_jiffies(UVESAFB_TIMEOUT));
 
 	uvfb_tasks[seq] = NULL;
 
@@ -425,6 +427,7 @@ static int uvesafb_open(struct fb_info *info, int user)
 				"cannot be determined (eax: 0x%lx, err %d)\n",
 				task->t.regs.eax, err);
 			err = 0;
+			goto out;
 		}
 
 		par->vbe_state_size = 64 * (task->t.regs.ebx & 0xffff);
@@ -433,13 +436,12 @@ static int uvesafb_open(struct fb_info *info, int user)
 			goto out;
 
 		uvesafb_reset(task);
-
 		task->t.regs.eax = 0x4f04;
 		task->t.regs.ecx = 0x000f;
 		task->t.regs.edx = 0x0001;
 		task->t.flags = TF_BUF_RET | TF_BUF_ESBX;
-		task->buf = (void*)(par->vbe_state);
 		task->t.buf_len = par->vbe_state_size;
+		task->buf = (void*)(par->vbe_state);
 
 		err = uvesafb_exec(task);
 

@@ -153,6 +153,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	v86_cleanup();
+
 	closelog();
 	close(s);
 	return 0;

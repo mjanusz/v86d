@@ -53,6 +53,11 @@ int v86_init() {
 	return (err == 1) ? 0 : 1;
 }
 
+void v86_cleanup()
+{
+	/* dummy function */
+}
+
 /*
  * Perform a simulated interrupt call.
  */
