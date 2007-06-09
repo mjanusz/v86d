@@ -1,0 +1,55 @@
+v86d -- A x86 Emulation Daemon
+------------------------------
+
+1. Purpose
+----------
+v86d provides a backend for kernel drivers that need to execute
+x86 BIOS code. The code is executed in a controlled environment
+and the results are passed back to the kernel via the netlink
+interface.
+
+2. Configuration
+----------------
+
+2.1. The C library
+------------------
+v86d can be compiled against two different C libraries: glibc
+and klibc, glibc being the default.
+
+Compiling against glibc will result in a dynamically linked
+executable that is not suitable for inclusion in initrds.
+
+Compiling against klibc will result in a relatively small,
+statically linked binary, which can be included in an initrd.
+
+To compile v86d against klibc, run ./configure --with-klibc
+after making sure that a recent (1.4 or newer) version of
+klibc is installed on your system.
+
+2.2. The emulator backend
+-------------------------
+On x86, the code that v86d executes can be run either in
+a fully software-emulated environment (x86emu) or a virtualized
+environment (vm86) supported by the CPU. On other arches
+or 64-bit systems, the code is always run by x86emu.
+
+To choose the x86emu backend on a x86 system, run ./configure
+--with-x86emu.
+
+3. Installation & Usage
+-----------------------
+To configure, build and install v86d with the default settings,
+run:
+
+ # ./configure --default
+ # make
+ # make install
+
+v86d isn't meant to be used in an interactive way. It should
+be started and called by the kernel. If you want to see it in
+action, build and load the uvesafb kernel module.
+
+If you want to include v86d into an initramfs image,
+misc/initramfs provides a minimal config parsable by
+gen_init_cpio.
+
