@@ -6,9 +6,9 @@ INSTALL = install
 
 ifeq ($(call config_opt,CONFIG_KLIBC),true)
 	export CC = klcc
-else
-	CFLAGS += -I/lib/modules/$(shell uname -r)/source/include
 endif
+
+CFLAGS += -I/lib/modules/$(shell uname -r)/source/include
 
 ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	CFLAGS += -Ilibs/x86emu

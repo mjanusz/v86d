@@ -17,7 +17,7 @@
 
 struct completion;
 
-#include "kernel/uvesafb.h"
+#include <video/uvesafb.h>
 
 //#define ulog(args...)	do {} while (0)
 //#define ulog(args...)		fprintf(stdout, ##args)
