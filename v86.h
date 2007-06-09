@@ -7,6 +7,10 @@
 #include <linux/connector.h>
 #include <asm/vm86.h>
 
+#undef u8
+#undef u16
+#undef u32
+
 #define u8 __u8
 #define u16 __u16
 #define u32 __u32

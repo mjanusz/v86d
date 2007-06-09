@@ -1,7 +1,7 @@
 #include <stdarg.h>
 #include <string.h>
+#include <x86emu.h>
 #include "v86.h"
-#include "x86emu.h"
 
 #define X86_EAX M.x86.R_EAX
 #define X86_EBX M.x86.R_EBX
@@ -43,12 +43,12 @@
 
 #define X86_TF_MASK		0x00000100
 #define X86_IF_MASK		0x00000200
-#define X86_IOPL_MASK		0x00003000
+#define X86_IOPL_MASK	0x00003000
 #define X86_NT_MASK		0x00004000
 #define X86_VM_MASK		0x00020000
 #define X86_AC_MASK		0x00040000
-#define X86_VIF_MASK		0x00080000	/* virtual interrupt flag */
-#define X86_VIP_MASK		0x00100000	/* virtual interrupt pending */
+#define X86_VIF_MASK	0x00080000	/* virtual interrupt flag */
+#define X86_VIP_MASK	0x00100000	/* virtual interrupt pending */
 #define X86_ID_MASK		0x00200000
 
 #define DEFAULT_V86_FLAGS  (X86_IF_MASK | X86_IOPL_MASK)

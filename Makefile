@@ -1,28 +1,53 @@
-ifeq ($(strip $(LIBC)),klibc)
-	CC = klcc
-	LDFLAGS += -Llibs/lrmi-0.10 -static
-	CFLAGS += -Ilibs/lrmi-0.10
+config_opt = $(shell if [ -e config.h -a -n "`egrep '^\#define[[:space:]]+$(1)([[:space:]]+|$$)' config.h 2>/dev/null`" ]; then echo true ; fi)
+
+.PHONY: clean install x86emu lrmi
+
+INSTALL = install
+
+ifeq ($(call config_opt,CONFIG_KLIBC),true)
+	export CC = klcc
 else
 	CFLAGS += -I/lib/modules/$(shell uname -r)/source/include
 endif
 
-CFLAGS += -Ilibs/x86emu
+ifeq ($(call config_opt,CONFIG_X86EMU),true)
+	CFLAGS += -Ilibs/x86emu
+	LDFLAGS += -Llibs/x86emu
+	LDLIBS += -lx86emu
+	V86OBJS = v86_x86emu.o
+	V86LIB = x86emu
+else
+	CFLAGS += -Ilibs/lrmi-0.10
+	LDFLAGS += -Llibs/lrmi-0.10 -static
+	LDLIBS += -llrmi
+	V86OBJS = v86_lrmi.o
+	V86LIB = lrmi
+endif
 
-INSTALL = install
+all: $(V86LIB) v86d
 
-all: v86d v86d_x86emu testvbe
+%.o: %.c v86.h
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-v86d: main.o v86_lrmi.o
-	$(CC) $(LDFLAGS) $+ -llrmi -o $@
+v86d: v86.o v86_mem.o $(V86OBJS)
+	$(CC) $(LDFLAGS) $+ $(LDLIBS) -o $@
 
-v86d_x86emu: main.o v86_x86emu.o v86_mem.o
-	$(CC) $(LDFLAGS) -Llibs/x86emu $+ -lx86emu -o $@
+testvbe: testvbe.o v86_mem.o $(V86OBJS)
+	$(CC) $(LDFLAGS) $+ $(LDLIBS) -o $@
 
-testvbe: testvbe.o v86_x86emu.o v86_mem.o
-	$(CC) $(LDFLAGS) -Llibs/x86emu $+ -lx86emu -o $@
+x86emu:
+	make -w -C libs/x86emu
+
+lrmi:
+	make -e -w -C libs/lrmi-0.10 liblrmi.a
 
 clean:
-	rm -rf *.o v86d
+	rm -rf *.o v86d testvbe
+	$(MAKE) -w -C libs/lrmi-0.10 clean
+	$(MAKE) -w -C libs/x86emu clean
+
+distclean: clean
+	rm -rf config.h
 
 install:
 	$(INSTALL) -D v86d $(DESTDIR)/sbin/v86d

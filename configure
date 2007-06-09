@@ -1,0 +1,134 @@
+#!/bin/bash
+#
+# ./configure -- A very simple configure script for splashutils.
+#
+# (c) 2006-2007, Michal Januszewski <spock@gentoo.org>
+#
+# In time, it will be replaced by a fully-fledged version.
+#
+
+copt_klibc=CONFIG_KLIBC
+copt_klibc_desc="Link statially against klibc"
+copt_klibc_type="bool"
+copt_klibc_def=n
+
+copt_x86emu=CONFIG_X86EMU
+copt_x86emu_desc="Use x86emu for BIOS calls"
+copt_x86emu_type="bool"
+copt_x86emu_def=auto
+copt_x86emu_test()
+{
+	local m=`uname -m`
+	if [ "$m" != "i686" -a "$m" != "i586" -a "$m" != "i486" -a "$m" != "i386" ]; then
+		echo "y";
+	else
+		echo "n";
+	fi
+}
+
+options=`set | grep '^copt_' | sed -re 's/copt_([^_=]+)[_=].*/\1/' | uniq`
+
+write_conf()
+{
+	echo -n > config.h
+
+	for i in ${options} ; do
+		eval vval=\$copt_$i\_val
+		eval vtype=\$copt_$i\_type
+		eval vname=\$copt_$i
+
+		if [[ "$vtype" == "bool" ]]; then
+			if [[ "$vval" == "y" ]]; then
+				echo "#define $vname" >> config.h
+			else
+				echo "#undef $vname" >> config.h
+			fi
+		else
+			echo "#define $vname \"$vval\"" >> config.h
+		fi
+	done
+
+	echo "config.h successfully created."
+	echo "You can run \`make\` now."
+}
+
+usage()
+{
+	cat <<EOTB
+v86d configuration script
+
+Please use the following options to configure v86d.
+EOTB
+    printf "  %-20s %-s\n\n" --default "Use a default v86d configuration"
+
+	for i in ${options} ; do
+		eval vtype=\$copt_$i\_type
+		eval vdesc=\$copt_$i\_desc
+		eval vdef=\$copt_$i\_def
+
+		if [[ ${vtype} == "string" ]]; then
+			with="--with-${i}=VAL"
+		else
+			with="--with-${i}"
+		fi
+
+		vdesc="${vdesc} (default: $vdef)"
+
+		printf "  %-20s %-s\n" ${with} "${vdesc}"
+	done
+}
+
+if [[ $# == 0 ]]; then
+	usage
+	exit
+fi
+
+for i in ${options} ; do
+	eval copt_${i}_val="\$copt_${i}_def"
+	if [ -n "$(set | grep copt_${i}_test)" ]; then
+		eval copt_${i}_val="\$(copt_${i}_test)"
+	fi
+done
+
+for i in $* ; do
+	if [[ "$i" == "--help" ]]; then
+		usage
+		exit
+	elif [[ "$i" == "--default" ]]; then
+		write_conf
+		exit
+	fi
+
+	j=${i//--with-}
+	if [[ "$j" != "$i" ]]; then
+		with=y
+	else
+		j=${i//--without-}
+		if [[ "$j" != "$i" ]]; then
+			with=n
+		else
+			usage
+			exit
+		fi
+	fi
+
+	optval=${j#*=}
+	optname=${j%=*}
+
+	eval t=\$copt_${optname}_val
+	if [[ "x$t" == "x" ]]; then
+		echo "Unrecognized setting ${optname}." 1>&2
+		exit
+	fi
+
+	eval vtype=\$copt_${optname}_type
+	if [[ "$vtype" == "bool" ]]; then
+		eval copt_${optname}_val=${with}
+	else
+		eval copt_${optname}_val=${optval}
+	fi
+done
+
+write_conf
+exit
+
