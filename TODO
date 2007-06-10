@@ -2,11 +2,8 @@ userspace:
 - support for in-RAM or in-ROM fields in VBEIB
 
 kernelspace:
+- fix the way videomodes are handled
 - finish driver probe and remove functions
-- task_prep -> check for failed memory allocations
-- check for messages larger than the max connector can handle
-- check for missing userspace daemon
-- make the daemon configurable
 - export device/driver options via sysfs
 
 general:

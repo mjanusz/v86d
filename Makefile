@@ -14,7 +14,7 @@ ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	CFLAGS += -Ilibs/x86emu
 	LDFLAGS += -Llibs/x86emu
 	LDLIBS += -lx86emu
-	V86OBJS = v86_x86emu.o
+	V86OBJS = v86_x86emu.o v86_mem.o
 	V86LIB = x86emu
 else
 	CFLAGS += -Ilibs/lrmi-0.10
@@ -29,10 +29,10 @@ all: $(V86LIB) v86d
 %.o: %.c v86.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-v86d: v86.o v86_mem.o $(V86OBJS)
+v86d: v86.o v86_common.o $(V86OBJS)
 	$(CC) $(LDFLAGS) $+ $(LDLIBS) -o $@
 
-testvbe: testvbe.o v86_mem.o $(V86OBJS)
+testvbe: testvbe.o v86_common.o $(V86OBJS)
 	$(CC) $(LDFLAGS) $+ $(LDLIBS) -o $@
 
 x86emu:

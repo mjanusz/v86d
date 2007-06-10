@@ -2,77 +2,10 @@
 #include <string.h>
 #include <x86emu.h>
 #include "v86.h"
-
-#define X86_EAX M.x86.R_EAX
-#define X86_EBX M.x86.R_EBX
-#define X86_ECX M.x86.R_ECX
-#define X86_EDX M.x86.R_EDX
-#define X86_ESI M.x86.R_ESI
-#define X86_EDI M.x86.R_EDI
-#define X86_EBP M.x86.R_EBP
-#define X86_EIP M.x86.R_EIP
-#define X86_ESP M.x86.R_ESP
-#define X86_EFLAGS M.x86.R_EFLG
-
-#define X86_FLAGS M.x86.R_FLG
-#define X86_AX M.x86.R_AX
-#define X86_BX M.x86.R_BX
-#define X86_CX M.x86.R_CX
-#define X86_DX M.x86.R_DX
-#define X86_SI M.x86.R_SI
-#define X86_DI M.x86.R_DI
-#define X86_BP M.x86.R_BP
-#define X86_IP M.x86.R_IP
-#define X86_SP M.x86.R_SP
-#define X86_CS M.x86.R_CS
-#define X86_DS M.x86.R_DS
-#define X86_ES M.x86.R_ES
-#define X86_SS M.x86.R_SS
-#define X86_FS M.x86.R_FS
-#define X86_GS M.x86.R_GS
-
-#define X86_AL M.x86.R_AL
-#define X86_BL M.x86.R_BL
-#define X86_CL M.x86.R_CL
-#define X86_DL M.x86.R_DL
-
-#define X86_AH M.x86.R_AH
-#define X86_BH M.x86.R_BH
-#define X86_CH M.x86.R_CH
-#define X86_DH M.x86.R_DH
-
-#define X86_TF_MASK		0x00000100
-#define X86_IF_MASK		0x00000200
-#define X86_IOPL_MASK	0x00003000
-#define X86_NT_MASK		0x00004000
-#define X86_VM_MASK		0x00020000
-#define X86_AC_MASK		0x00040000
-#define X86_VIF_MASK	0x00080000	/* virtual interrupt flag */
-#define X86_VIP_MASK	0x00100000	/* virtual interrupt pending */
-#define X86_ID_MASK		0x00200000
-
-#define DEFAULT_V86_FLAGS  (X86_IF_MASK | X86_IOPL_MASK)
-
-#define addr(t) (((t & 0xffff0000) >> 12) + (t & 0x0000ffff))
+#include "v86_x86emu.h"
 
 u8 *stack;
 u8 *halt;
-
-#define __BUILDIO(bwl,bw,type)									\
-static void x_out ## bwl (u16 port, type value) {				\
-	/*printf("out" #bwl " %x, %x\n", port, value);	*/			\
-	__asm__ __volatile__("out" #bwl " %" #bw "0, %w1"			\
-			: : "a"(value), "Nd"(port));						\
-}																\
-																\
-static type x_in ## bwl (u16 port) {							\
-	type value;													\
-	__asm__ __volatile__("in" #bwl " %w1, %" #bw "0"			\
-			: "=a"(value)										\
-			: "Nd"(port));										\
-	/*printf("in" #bwl " %x = %x\n", port, value);	*/			\
-	return value;												\
-}
 
 __BUILDIO(b,b,u8);
 __BUILDIO(w,w,u16);
@@ -82,7 +15,6 @@ void printk(const char *fmt, ...)
 {
 	va_list argptr;
 	va_start(argptr, fmt);
-	vprintf(fmt, argptr);
 	vsyslog(LOG_INFO, fmt, argptr);
 	va_end(argptr);
 }
@@ -207,6 +139,7 @@ int v86_int(int num, struct vm86_regs *regs)
 
 	rconv_vm86_to_x86emu(regs);
 
+	X86_DS = 0x0040;
 	X86_CS  = get_int_seg(num);
 	X86_EIP = get_int_off(num);
 	X86_SS = (u32)stack >> 4;
@@ -221,75 +154,6 @@ int v86_int(int num, struct vm86_regs *regs)
 	X86EMU_exec();
 
 	rconv_x86emu_to_vm86(regs);
-	return 0;
-}
-
-#define vbeib_get_string(name)			\
-{										\
-	t = addr(ib->name);					\
-	ulog("%x %x\n", t, bufend);			\
-	if (t < bufend) {					\
-		ib->name = t - (u32)lbuf;		\
-	} else {							\
-		ib->name = 0;					\
-	}									\
-}
-
-int v86_task(struct uvesafb_task *tsk, u8 *buf)
-{
-	u8 *lbuf;
-
-	/* Get the VBE Info Block */
-	if (tsk->flags & TF_VBEIB) {
-		struct vbe_ib *ib;
-		u32 t, bufend;
-
-		lbuf = v86_mem_alloc(tsk->buf_len);
-		memcpy(lbuf, buf, tsk->buf_len);
-		tsk->regs.es  = (u32)lbuf >> 4;
-		tsk->regs.edi = 0x0000;
-
-		if (v86_int(0x10, &tsk->regs) || (tsk->regs.eax & 0xffff) != 0x004f)
-			goto out_vbeib;
-
-		ib = (struct vbe_ib*)buf;
-		bufend = (u32)(lbuf + sizeof(struct vbe_ib));
-		memcpy(buf, lbuf, tsk->buf_len);
-
-		vbeib_get_string(oem_string_ptr);
-		vbeib_get_string(oem_vendor_name_ptr);
-		vbeib_get_string(oem_product_name_ptr);
-		vbeib_get_string(oem_product_rev_ptr);
-		vbeib_get_string(mode_list_ptr);
-out_vbeib:
-		v86_mem_free(lbuf);
-	} else {
-		if (tsk->buf_len) {
-			lbuf = v86_mem_alloc(tsk->buf_len);
-			memcpy(lbuf, buf, tsk->buf_len);
-		}
-
-		if (tsk->flags & TF_BUF_ESDI) {
-			tsk->regs.es = (u32)lbuf >> 4;
-			tsk->regs.edi = 0x0000;
-		}
-
-		if (tsk->flags & TF_BUF_ESBX) {
-			tsk->regs.es = (u32)lbuf >> 4;
-			tsk->regs.ebx = 0x0000;
-		}
-
-		if (v86_int(0x10, &tsk->regs) || (tsk->regs.eax & 0xffff) != 0x004f)
-			goto out;
-
-		if (tsk->buf_len && tsk->flags & TF_BUF_RET) {
-			memcpy(buf, lbuf, tsk->buf_len);
-		}
-out:
-		if (tsk->buf_len)
-			v86_mem_free(lbuf);
-	}
-
 	return 0;
 }
 

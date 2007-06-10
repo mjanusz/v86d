@@ -33,6 +33,15 @@ int main(int argc, char *argv[])
 
 	printf("%s\n", ((struct vbe_ib*)buf)->oem_vendor_name_ptr + buf);
 
+	tsk.regs.eax = 0x4f02;
+	tsk.regs.ebx = 0x0118;
+	tsk.buf_len = 0;
+	tsk.flags = 0;
+
+	v86_task(&tsk, buf);
+
+	printf("got eax = %x\n", tsk.regs.eax);
+
 	v86_cleanup();
 
 	return 0;

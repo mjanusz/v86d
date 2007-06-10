@@ -70,8 +70,8 @@ static int real_mem_init(void)
 		return 0;
 
 	if (!map_file((void *)REAL_MEM_BASE, REAL_MEM_SIZE,
-	 PROT_READ | PROT_WRITE | PROT_EXEC,
-	 MAP_FIXED | MAP_PRIVATE, "/dev/zero", 0))
+		 PROT_READ | PROT_WRITE | PROT_EXEC,
+		 MAP_FIXED | MAP_PRIVATE, "/dev/zero", 0))
 		return 0;
 
 	real_mem = (u8*)0;
@@ -175,7 +175,6 @@ inline u16 get_int_seg(int i)
 {
 	return *(u16 *)(i * 4 + 2);
 }
-
 
 inline u16 get_int_off(int i)
 {

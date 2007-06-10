@@ -5,7 +5,7 @@
 #include <syslog.h>
 #include <sys/types.h>
 #include <linux/connector.h>
-#include <asm/vm86.h>
+#include <asm-i386/vm86.h>
 
 #undef u8
 #undef u16
