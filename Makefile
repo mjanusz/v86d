@@ -3,12 +3,13 @@ config_opt = $(shell if [ -e config.h -a -n "`egrep '^\#define[[:space:]]+$(1)([
 .PHONY: clean install x86emu lrmi
 
 INSTALL = install
+KDIR   ?= /lib/modules/$(shell uname -r)/source
 
 ifeq ($(call config_opt,CONFIG_KLIBC),true)
 	export CC = klcc
 endif
 
-CFLAGS += -I/lib/modules/$(shell uname -r)/source/include
+CFLAGS += -I$(KDIR)/include
 
 ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	CFLAGS += -Ilibs/x86emu
