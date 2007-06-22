@@ -1,11 +1,3 @@
-userspace:
-- support for in-RAM or in-ROM fields in VBEIB
-
-kernelspace:
-- fix the way videomodes are handled
-- finish driver probe and remove functions
-- export device/driver options via sysfs
-
 general:
 - printing to tty1 from v86d causes a hang
-
+  (to be expected due to how the console sem is handled in the kernel)

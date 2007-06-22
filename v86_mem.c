@@ -183,9 +183,6 @@ inline u16 get_int_off(int i)
 
 int v86_mem_init(void)
 {
-	void *m;
-	int fd_mem;
-
 	if (real_mem_init())
 		return 1;
 

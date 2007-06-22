@@ -5,7 +5,6 @@
 #include <syslog.h>
 #include <sys/types.h>
 #include <linux/connector.h>
-#include <asm-i386/vm86.h>
 
 #undef u8
 #undef u16
@@ -25,7 +24,7 @@ struct completion;
 #define ulog(args...)	syslog(LOG_INFO, ##args)
 
 int v86_init();
-int v86_int(int num, struct vm86_regs *regs);
+int v86_int(int num, struct v86_regs *regs);
 int v86_task(struct uvesafb_task *tsk, u8 *buf);
 void v86_cleanup();
 

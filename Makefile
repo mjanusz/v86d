@@ -9,6 +9,7 @@ ifeq ($(call config_opt,CONFIG_KLIBC),true)
 	export CC = klcc
 endif
 
+CFLAGS ?= -Wall
 CFLAGS += -I$(KDIR)/include
 
 ifeq ($(call config_opt,CONFIG_X86EMU),true)

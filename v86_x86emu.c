@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <x86emu.h>
+#include <sys/io.h>
 #include "v86.h"
 #include "v86_x86emu.h"
 
@@ -92,7 +93,7 @@ void v86_cleanup()
 	v86_mem_cleanup();
 }
 
-void rconv_vm86_to_x86emu(struct vm86_regs *rs)
+void rconv_v86_to_x86emu(struct v86_regs *rs)
 {
 	X86_EAX = rs->eax;
 	X86_EBX = rs->ebx;
@@ -111,7 +112,7 @@ void rconv_vm86_to_x86emu(struct vm86_regs *rs)
 	X86_GS  = rs->gs;
 }
 
-void rconv_x86emu_to_vm86(struct vm86_regs *rd)
+void rconv_x86emu_to_v86(struct v86_regs *rd)
 {
 	rd->eax = X86_EAX;
 	rd->ebx = X86_EBX;
@@ -133,11 +134,9 @@ void rconv_x86emu_to_vm86(struct vm86_regs *rd)
 /*
  * Perform a simulated interrupt call.
  */
-int v86_int(int num, struct vm86_regs *regs)
+int v86_int(int num, struct v86_regs *regs)
 {
-	int err;
-
-	rconv_vm86_to_x86emu(regs);
+	rconv_v86_to_x86emu(regs);
 
 	X86_DS = 0x0040;
 	X86_CS  = get_int_seg(num);
@@ -153,7 +152,7 @@ int v86_int(int num, struct vm86_regs *regs)
 
 	X86EMU_exec();
 
-	rconv_x86emu_to_vm86(regs);
+	rconv_x86emu_to_v86(regs);
 	return 0;
 }
 

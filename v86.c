@@ -50,7 +50,9 @@ int req_exec(int s, struct cn_msg *msg)
 {
 	struct uvesafb_task *tsk = (struct uvesafb_task*)(msg + 1);
 	u8 *buf = (u8*)tsk + sizeof(struct uvesafb_task);
-	int i;
+
+	if (tsk->flags & TF_EXIT)
+		return 1;
 
 	v86_task(tsk, buf);
 	netlink_send(s, msg);
@@ -61,16 +63,12 @@ int req_exec(int s, struct cn_msg *msg)
 
 int main(int argc, char *argv[])
 {
-	int s;
 	char buf[CONNECTOR_MAX_MSG_SIZE];
-	int len, i;
+	int len, i, err = 0, s;
 	struct nlmsghdr *reply;
 	struct sockaddr_nl l_local;
 	struct cn_msg *data;
-	time_t tm;
 	struct pollfd pfd;
-
-	FILE *fout;
 
 	s = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR);
 	if (s == -1) {
@@ -79,7 +77,7 @@ int main(int argc, char *argv[])
 	}
 
 	l_local.nl_family = AF_NETLINK;
-	l_local.nl_groups = 1 << (CN_IDX_UVESAFB-1); /* bitmask of requested groups */
+	l_local.nl_groups = 1 << (CN_IDX_V86D-1); /* bitmask of requested groups */
 	l_local.nl_pid = 0;
 
 	if (bind(s, (struct sockaddr *)&l_local, sizeof(struct sockaddr_nl)) == -1) {
@@ -101,17 +99,7 @@ int main(int argc, char *argv[])
 	if (v86_init())
 		return -1;
 
-	ulog("it's alive %d!\n", s);
 	memset(buf, 0, sizeof(buf));
-
-/*	data = (struct cn_msg *)buf;
-	data->id.idx = CN_IDX_UVESAFB;
-	data->id.val = CN_VAL_UVESAFB;
-	data->seq = seq++;
-	data->ack = 0;
-	data->len = 0;
-	netlink_send(s, data);
-*/
 	pfd.fd = s;
 
 	while (!need_exit) {
@@ -133,8 +121,8 @@ int main(int argc, char *argv[])
 		len = recv(s, buf, sizeof(buf), 0);
 		if (len == -1) {
 			perror("recv buf");
-			close(s);
-			return -1;
+			err = -1;
+			goto out;
 		}
 
 		reply = (struct nlmsghdr *)buf;
@@ -146,16 +134,18 @@ int main(int argc, char *argv[])
 
 		case NLMSG_DONE:
 			data = (struct cn_msg *)NLMSG_DATA(reply);
-			req_exec(s, data);
+			if (req_exec(s, data))
+				goto out;
 			break;
 		default:
 			break;
 		}
 	}
 
+out:
 	v86_cleanup();
 
 	closelog();
 	close(s);
-	return 0;
+	return err;
 }

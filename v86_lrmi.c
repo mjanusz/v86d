@@ -2,7 +2,7 @@
 #include <lrmi.h>
 #include "v86.h"
 
-void rconv_vm86_to_LRMI(struct vm86_regs *rs, struct LRMI_regs *rd)
+void rconv_v86_to_LRMI(struct v86_regs *rs, struct LRMI_regs *rd)
 {
 	memset(rd, 0, sizeof(*rd));
 
@@ -23,7 +23,7 @@ void rconv_vm86_to_LRMI(struct vm86_regs *rs, struct LRMI_regs *rd)
 	rd->gs  = rs->gs;
 }
 
-void rconv_LRMI_to_vm86(struct LRMI_regs *rs, struct vm86_regs *rd)
+void rconv_LRMI_to_v86(struct LRMI_regs *rs, struct v86_regs *rd)
 {
 	rd->eax = rs->eax;
 	rd->ebx = rs->ebx;
@@ -59,14 +59,14 @@ void v86_cleanup()
 /*
  * Perform a simulated interrupt call.
  */
-int v86_int(int num, struct vm86_regs *regs)
+int v86_int(int num, struct v86_regs *regs)
 {
 	struct LRMI_regs r;
 	int err;
 
-	rconv_vm86_to_LRMI(regs, &r);
+	rconv_v86_to_LRMI(regs, &r);
 	err = LRMI_int(num, &r);
-	rconv_LRMI_to_vm86(&r, regs);
+	rconv_LRMI_to_v86(&r, regs);
 
 	return (err == 1) ? 0 : 1;
 }
