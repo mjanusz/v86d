@@ -8,7 +8,7 @@
 #
 
 copt_klibc=CONFIG_KLIBC
-copt_klibc_desc="Link statially against klibc"
+copt_klibc_desc="Link statically against klibc"
 copt_klibc_type="bool"
 copt_klibc_def=n
 

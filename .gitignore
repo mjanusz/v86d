@@ -1,3 +1,5 @@
+libs/x86emu/libx86emu.a
+kernel
 config.h
 helper
 v86d

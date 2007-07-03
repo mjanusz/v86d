@@ -1,7 +1,11 @@
 #include <stdarg.h>
 #include <string.h>
 #include <x86emu.h>
-#include <sys/io.h>
+/*
+  This is header file for x86_64 is broken in current versions
+  of klibc, so we temporarily comment it out.
+  #include <sys/io.h>
+*/
 #include "v86.h"
 #include "v86_x86emu.h"
 
