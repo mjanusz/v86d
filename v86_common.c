@@ -4,13 +4,16 @@
 
 #define vbeib_get_string(name)					\
 {												\
+	int l;										\
 	t = addr(ib->name);							\
 	if (t < bufend) {							\
 		ib->name = t - (u32)lbuf;				\
 	} else if (t > 0xa0000 && fsize > 0) {		\
 		strncpy((char*)buf, (char*)t, fsize);	\
 		ib->name = tsk->buf_len - fsize;		\
-		fsize -= strlen((char*)t);				\
+		l = strlen((char*)t);					\
+		fsize -= l;								\
+		buf += l;								\
 		if (fsize < 0)							\
 			fsize = 0;							\
 	} else {									\
@@ -70,6 +73,8 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 			ulog("Can't retrieve mode list from %x\n", t);
 			ib->mode_list_ptr = 0;
 		}
+
+		buf += 512;
 
 		vbeib_get_string(oem_string_ptr);
 		vbeib_get_string(oem_vendor_name_ptr);
