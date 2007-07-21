@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #include "v86.h"
 
 #define REAL_MEM_BLOCKS	0x100
@@ -17,28 +18,6 @@ static struct {
 	int count;
 	struct mem_block blocks[REAL_MEM_BLOCKS];
 } mem_info = { 0 };
-
-static int read_file(char *name, void *p, size_t n)
-{
-	int fd;
-
-	fd = open(name, O_RDONLY);
-
-	if (fd == -1) {
-		perror("open");
-		return 0;
-	}
-
-	if (read(fd, p, n) != n) {
-		perror("read");
-		close(fd);
-		return 0;
-	}
-
-	close(fd);
-
-	return 1;
-}
 
 static int map_file(void *start, size_t length, int prot, int flags, char *name, long offset)
 {
@@ -173,12 +152,12 @@ static inline void set_bit(unsigned int bit, void *array)
 
 inline u16 get_int_seg(int i)
 {
-	return *(u16 *)(i * 4 + 2);
+	return *(u16 *)(uptr)(i * 4 + 2);
 }
 
 inline u16 get_int_off(int i)
 {
-	return *(u16 *)(i * 4);
+	return *(u16 *)(uptr)(i * 4);
 }
 
 int v86_mem_init(void)
@@ -186,22 +165,21 @@ int v86_mem_init(void)
 	if (real_mem_init())
 		return 1;
 
+	/*
+	 * We have to map the IVTBDA as shared.  Without it, setting video
+	 * modes will not work correctly on some cards (e.g. nVidia GeForce
+	 * 8600M, 10de:0425).
+	 */
 	if (!map_file((void *)IVTBDA_BASE, IVTBDA_SIZE,
 		PROT_READ | PROT_WRITE | PROT_EXEC,
-		MAP_FIXED | MAP_PRIVATE, "/dev/zero", 0))
+		MAP_FIXED | MAP_SHARED, "/dev/mem", 0))
 	{
 		real_mem_deinit();
 		return 1;
 	}
 
-	if (!read_file("/dev/mem", (void *)IVTBDA_BASE, IVTBDA_SIZE)) {
-		munmap((void *)IVTBDA_BASE, IVTBDA_SIZE);
-		real_mem_deinit();
-		return 1;
-	}
-
-	if (!map_file((void *)0xa0000, 0x100000 - 0xa0000,
-		PROT_READ | PROT_WRITE,
+	if (!map_file((void *)0xa0000, MEM_SIZE - 0xa0000,
+		PROT_READ | PROT_WRITE | PROT_EXEC,
 		MAP_FIXED | MAP_SHARED, "/dev/mem", 0xa0000))
 	{
 		munmap((void *)IVTBDA_BASE, IVTBDA_SIZE);
@@ -215,7 +193,7 @@ int v86_mem_init(void)
 void v86_mem_cleanup(void)
 {
 	munmap((void *)IVTBDA_BASE, IVTBDA_SIZE);
-	munmap((void *)0xa0000, 0x100000 - 0xa0000);
+	munmap((void *)0xa0000, MEM_SIZE - 0xa0000);
 
 	real_mem_deinit();
 }
