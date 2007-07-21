@@ -1,11 +1,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <x86emu.h>
-/*
-  This is header file for x86_64 is broken in current versions
-  of klibc, so we temporarily comment it out.
-  #include <sys/io.h>
-*/
 #include "v86.h"
 #include "v86_x86emu.h"
 
@@ -35,14 +30,13 @@ static void x86emu_do_int(int num)
 	u32 eflags;
 
 	eflags = X86_EFLAGS;
-	eflags = eflags | X86_IF_MASK;
 
 	/* Return address and flags */
 	pushw(eflags);
 	pushw(X86_CS);
 	pushw(X86_IP);
-	X86_EFLAGS = X86_EFLAGS & ~(X86_VIF_MASK | X86_TF_MASK);
 
+	X86_EFLAGS = X86_EFLAGS & ~(X86_VIF_MASK | X86_TF_MASK);
 	X86_CS = rdw((num << 2) + 2);
 	X86_IP = rdw((num << 2));
 }
@@ -51,19 +45,19 @@ int v86_init()
 {
 	X86EMU_intrFuncs intFuncs[256];
 	X86EMU_pioFuncs pioFuncs = {
-		.inb = x_inb,
-		.inw = x_inw,
-		.inl = x_inl,
-		.outb = x_outb,
-		.outw = x_outw,
-		.outl = x_outl,
+		.inb = &x_inb,
+		.inw = &x_inw,
+		.inl = &x_inl,
+		.outb = &x_outb,
+		.outw = &x_outw,
+		.outl = &x_outl,
 	};
 	int i;
 
 	v86_mem_init();
 
 	stack = v86_mem_alloc(DEFAULT_STACK_SIZE);
-	X86_SS = (u32)stack >> 4;
+	X86_SS = (uptr)stack >> 4;
 	X86_ESP = 0xfffe;
 
 	halt = v86_mem_alloc(0x100);
@@ -84,7 +78,7 @@ int v86_init()
 	/* M is a macro poiting to the global virtual machine state
 	 * for x86emu. */
 	M.mem_base = 0x0;
-	M.mem_size = 0x100000;
+	M.mem_size = MEM_SIZE;
 
 	ioperm(0, 1024, 1);
 	iopl(3);
@@ -142,21 +136,41 @@ int v86_int(int num, struct v86_regs *regs)
 {
 	rconv_v86_to_x86emu(regs);
 
+	X86_GS = 0;
+	X86_FS = 0;
 	X86_DS = 0x0040;
 	X86_CS  = get_int_seg(num);
 	X86_EIP = get_int_off(num);
-	X86_SS = (u32)stack >> 4;
+	X86_SS = (u32)(uptr)stack >> 4;
 	X86_ESP = 0xffff;
-	X86_EFLAGS = DEFAULT_V86_FLAGS | X86_IF_MASK;
-	X86_EFLAGS &= ~(X86_VIF_MASK | X86_TF_MASK | X86_IF_MASK | X86_NT_MASK);
+	X86_EFLAGS = X86_IF_MASK | X86_IOPL_MASK;
 
-	pushw(DEFAULT_V86_FLAGS);
-	pushw(((u32)halt >> 4));
+	pushw(X86_EFLAGS);
+	pushw(((u32)(uptr)halt >> 4));
 	pushw(0x0);
 
 	X86EMU_exec();
 
 	rconv_x86emu_to_v86(regs);
 	return 0;
+}
+
+void v86_dump_regs()
+{
+	ulog(
+		"EAX=0x%8.8lx, EBX=0x%8.8lx, ECX=0x%8.8lx, EDX=0x%8.8lx\n",
+		(unsigned long)X86_EAX, (unsigned long)X86_EBX,
+		(unsigned long)X86_ECX, (unsigned long)X86_EDX);
+	ulog(
+		"ESP=0x%8.8lx, EBP=0x%8.8lx, ESI=0x%8.8lx, EDI=0x%8.8lx\n",
+		(unsigned long)X86_ESP, (unsigned long)X86_EBP,
+		(unsigned long)X86_ESI, (unsigned long)X86_EDI);
+    ulog(
+		"CS=0x%4.4x, SS=0x%4.4x,"
+		" DS=0x%4.4x, ES=0x%4.4x, FS=0x%4.4x, GS=0x%4.4x\n",
+		X86_CS, X86_SS, X86_DS, X86_ES, X86_FS, X86_GS);
+    ulog(
+		"EIP=0x%8.8lx, EFLAGS=0x%8.8lx\n",
+		(unsigned long)X86_EIP, (unsigned long)X86_EFLAGS);
 }
 
