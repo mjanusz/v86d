@@ -51,9 +51,13 @@
 
 #define DEFAULT_V86_FLAGS  (X86_IF_MASK | X86_IOPL_MASK)
 
+extern int iopl (int __level);
+extern int ioperm (unsigned long int __from, unsigned long int __num,
+					int __turn_on);
+
 #define __BUILDIO(bwl,bw,type)									\
 static void x_out ## bwl (u16 port, type value) {				\
-	/*printf("out" #bwl " %x, %x\n", port, value);	*/			\
+	/*printf("out" #bwl " %x, %x\n", port, value);*/			\
 	__asm__ __volatile__("out" #bwl " %" #bw "0, %w1"			\
 			: : "a"(value), "Nd"(port));						\
 }																\
@@ -63,8 +67,7 @@ static type x_in ## bwl (u16 port) {							\
 	__asm__ __volatile__("in" #bwl " %w1, %" #bw "0"			\
 			: "=a"(value)										\
 			: "Nd"(port));										\
-	/*printf("in" #bwl " %x = %x\n", port, value);	*/			\
+	/*printf("in" #bwl " %x = %x\n", port, value);*/			\
 	return value;												\
 }
-
 #endif /* __H_V86_X86EMU */

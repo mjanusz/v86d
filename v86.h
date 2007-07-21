@@ -9,10 +9,18 @@
 #undef u8
 #undef u16
 #undef u32
+#undef u64
 
 #define u8 __u8
 #define u16 __u16
 #define u32 __u32
+#define u64 __u64
+
+#ifdef __x86_64__
+#define uptr u64
+#else
+#define uptr u32
+#endif
 
 struct completion;
 
@@ -28,11 +36,12 @@ int v86_int(int num, struct v86_regs *regs);
 int v86_task(struct uvesafb_task *tsk, u8 *buf);
 void v86_cleanup();
 
+#define MEM_SIZE			0x10ffef
 #define IVTBDA_BASE			0x00000
 #define IVTBDA_SIZE			0x01000
 #define DEFAULT_STACK_SIZE	0x02000
 #define REAL_MEM_BASE		0x10000
-#define REAL_MEM_SIZE		0xa0000 - REAL_MEM_BASE
+#define REAL_MEM_SIZE		(0x30000 - REAL_MEM_BASE)
 #define BIOS_MEM_SIZE		(0x100000 - REAL_MEM_BASE - REAL_MEM_SIZE)
 
 void *v86_mem_alloc(int size);

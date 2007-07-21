@@ -1,3 +1,4 @@
+#include <string.h>
 #include "v86.h"
 
 #define addr(t) (((t & 0xffff0000) >> 12) + (t & 0x0000ffff))
@@ -7,7 +8,7 @@
 	int l;										\
 	t = addr(ib->name);							\
 	if (t < bufend) {							\
-		ib->name = t - (u32)lbuf;				\
+		ib->name = t - (uptr)lbuf;				\
 	} else if (t > 0xa0000 && fsize > 0) {		\
 		strncpy((char*)buf, (char*)t, fsize);	\
 		ib->name = tsk->buf_len - fsize;		\
@@ -29,19 +30,19 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 	if (tsk->flags & TF_VBEIB) {
 		struct vbe_ib *ib;
 		int fsize;
-		u32 t, bufend;
+		uptr t, bufend;
 		u16 *ts, *td;
 
 		lbuf = v86_mem_alloc(tsk->buf_len);
 		memcpy(lbuf, buf, tsk->buf_len);
-		tsk->regs.es  = (u32)lbuf >> 4;
+		tsk->regs.es  = (uptr)lbuf >> 4;
 		tsk->regs.edi = 0x0000;
 
 		if (v86_int(0x10, &tsk->regs) || (tsk->regs.eax & 0xffff) != 0x004f)
 			goto out_vbeib;
 
 		ib = (struct vbe_ib*)buf;
-		bufend = (u32)(lbuf + sizeof(*ib));
+		bufend = (uptr)(lbuf + sizeof(*ib));
 		memcpy(buf, lbuf, tsk->buf_len);
 
 		/* The original VBE Info Block is 512 bytes long. */
@@ -50,7 +51,7 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 		t = addr(ib->mode_list_ptr);
 		/* Mode list is in the buffer, we're good. */
 		if (t < bufend) {
-			ib->mode_list_ptr = t - (u32)lbuf;
+			ib->mode_list_ptr = t - (uptr)lbuf;
 
 		/* Mode list is in the ROM. We copy as much of it as we can
 		 * to the task buffer. */
@@ -89,12 +90,12 @@ out_vbeib:
 		}
 
 		if (tsk->flags & TF_BUF_ESDI) {
-			tsk->regs.es = (u32)lbuf >> 4;
+			tsk->regs.es = (uptr)lbuf >> 4;
 			tsk->regs.edi = 0x0000;
 		}
 
 		if (tsk->flags & TF_BUF_ESBX) {
-			tsk->regs.es = (u32)lbuf >> 4;
+			tsk->regs.es = (uptr)lbuf >> 4;
 			tsk->regs.ebx = 0x0000;
 		}
 
