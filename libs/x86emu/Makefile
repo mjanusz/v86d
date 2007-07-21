@@ -7,7 +7,6 @@ libx86emu.a: $(OBJS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 CFLAGS += -I. -I../../include -I../../include/x86emu
-CFLAGS += -D__DRIVER__ -DFORCE_POST
 
 clean:
 	rm -f *.a *.o
