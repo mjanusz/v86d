@@ -1,3 +1,7 @@
 general:
 - printing to tty1 from v86d causes a hang
   (to be expected due to how the console sem is handled in the kernel)
+
+x86emu:
+- switch to Paulo Marques' version (?)
+- clean up memory access functions

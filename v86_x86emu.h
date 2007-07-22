@@ -51,10 +51,6 @@
 
 #define DEFAULT_V86_FLAGS  (X86_IF_MASK | X86_IOPL_MASK)
 
-extern int iopl (int __level);
-extern int ioperm (unsigned long int __from, unsigned long int __num,
-					int __turn_on);
-
 #define __BUILDIO(bwl,bw,type)									\
 static void x_out ## bwl (u16 port, type value) {				\
 	/*printf("out" #bwl " %x, %x\n", port, value);*/			\

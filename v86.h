@@ -54,4 +54,8 @@ u16 get_int_off(int i);
 
 extern u8 *real_mem;
 
+extern int iopl (int __level);
+extern int ioperm (unsigned long int __from, unsigned long int __num,
+					int __turn_on);
+
 #endif /* __H_V86 */
