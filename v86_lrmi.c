@@ -100,10 +100,10 @@ int v86_int(int num, struct v86_regs *regs)
 	return (err == 1) ? 0 : 1;
 }
 
-inline void v86_mem_free(void *m) {
+inline void v86_mem_free(u32 m) {
 	LRMI_free_real(m);
 }
 
-inline void *v86_mem_alloc(int size) {
+inline u32 v86_mem_alloc(int size) {
 	return LRMI_alloc_real(size);
 }
