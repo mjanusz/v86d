@@ -101,9 +101,9 @@ int v86_int(int num, struct v86_regs *regs)
 }
 
 inline void v86_mem_free(u32 m) {
-	LRMI_free_real(m);
+	LRMI_free_real((void*)m);
 }
 
 inline u32 v86_mem_alloc(int size) {
-	return LRMI_alloc_real(size);
+	return (u32)LRMI_alloc_real(size);
 }
