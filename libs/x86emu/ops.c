@@ -88,8 +88,8 @@ static void x86emuOp_illegal_op(
     if (M.x86.R_SP != 0) {
     DECODE_PRINTF("ILLEGAL X86 OPCODE\n");
     TRACE_REGS();
-    DB( printk("%04x:%04x: %02X ILLEGAL X86 OPCODE!\n",
-        M.x86.R_CS, M.x86.R_IP-1,op1));
+    printk("%04x:%04x: %02X ILLEGAL X86 OPCODE!\n",
+        M.x86.R_CS, M.x86.R_IP-1,op1);
     HALT_SYS();
         }
     else {

@@ -4,4 +4,3 @@ general:
 
 x86emu:
 - switch to Paulo Marques' version (?)
-- clean up memory access functions

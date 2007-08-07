@@ -8,11 +8,11 @@
 	int l;										\
 	t = addr(ib->name);							\
 	if (t < bufend) {							\
-		ib->name = t - (uptr)lbuf;				\
+		ib->name = t - lbuf;					\
 	} else if (t > 0xa0000 && fsize > 0) {		\
-		strncpy((char*)buf, (char*)t, fsize);	\
+		strncpy((char*)buf, vptr(t), fsize);	\
 		ib->name = tsk->buf_len - fsize;		\
-		l = strlen((char*)t);					\
+		l = strlen((char*)buf);					\
 		fsize -= l;								\
 		buf += l;								\
 		if (fsize < 0)							\
@@ -24,26 +24,26 @@
 
 int v86_task(struct uvesafb_task *tsk, u8 *buf)
 {
-	u8 *lbuf = NULL;
+	u32 lbuf = 0;
 
 	/* Get the VBE Info Block */
 	if (tsk->flags & TF_VBEIB) {
 		struct vbe_ib *ib;
 		int fsize;
-		uptr t, bufend;
-		u16 *ts, *td;
+		u32 t, bufend;
+		u16 *td;
 
 		lbuf = v86_mem_alloc(tsk->buf_len);
-		memcpy(lbuf, buf, tsk->buf_len);
-		tsk->regs.es  = (uptr)lbuf >> 4;
+		memcpy(vptr(lbuf), buf, tsk->buf_len);
+		tsk->regs.es  = lbuf >> 4;
 		tsk->regs.edi = 0x0000;
 
 		if (v86_int(0x10, &tsk->regs) || (tsk->regs.eax & 0xffff) != 0x004f)
 			goto out_vbeib;
 
 		ib = (struct vbe_ib*)buf;
-		bufend = (uptr)(lbuf + sizeof(*ib));
-		memcpy(buf, lbuf, tsk->buf_len);
+		bufend = lbuf + sizeof(*ib);
+		memcpy(buf, vptr(lbuf), tsk->buf_len);
 
 		/* The original VBE Info Block is 512 bytes long. */
 		fsize = tsk->buf_len - 512;
@@ -51,18 +51,19 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 		t = addr(ib->mode_list_ptr);
 		/* Mode list is in the buffer, we're good. */
 		if (t < bufend) {
-			ib->mode_list_ptr = t - (uptr)lbuf;
+			ib->mode_list_ptr = t - lbuf;
 
 		/* Mode list is in the ROM. We copy as much of it as we can
 		 * to the task buffer. */
 		} else if (t > 0xa0000) {
-			ts = (u16*) t;
+			u16 tmp;
+
 			td = (u16*) (buf + 512);
 
-			while (fsize > 2 && *ts != 0xffff) {
+			while (fsize > 2 && (tmp = v_rdw(t)) != 0xffff) {
 				fsize -= 2;
-				*td = *ts;
-				ts++;
+				*td = tmp;
+				t += 2;
 				td++;
 			}
 
@@ -86,16 +87,16 @@ out_vbeib:
 	} else {
 		if (tsk->buf_len) {
 			lbuf = v86_mem_alloc(tsk->buf_len);
-			memcpy(lbuf, buf, tsk->buf_len);
+			memcpy(vptr(lbuf), buf, tsk->buf_len);
 		}
 
 		if (tsk->flags & TF_BUF_ESDI) {
-			tsk->regs.es = (uptr)lbuf >> 4;
+			tsk->regs.es = lbuf >> 4;
 			tsk->regs.edi = 0x0000;
 		}
 
 		if (tsk->flags & TF_BUF_ESBX) {
-			tsk->regs.es = (uptr)lbuf >> 4;
+			tsk->regs.es = lbuf >> 4;
 			tsk->regs.ebx = 0x0000;
 		}
 
@@ -103,7 +104,7 @@ out_vbeib:
 			goto out;
 
 		if (tsk->buf_len && tsk->flags & TF_BUF_RET) {
-			memcpy(buf, lbuf, tsk->buf_len);
+			memcpy(buf, vptr(lbuf), tsk->buf_len);
 		}
 out:
 		if (tsk->buf_len)

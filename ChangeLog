@@ -1,0 +1,5 @@
+2007-08-07 * 0.1-rc5
+
+- Change the v86 memory access functions so that they no longer require 
+  mapping files into the first 1 MB of the address space.
+

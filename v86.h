@@ -16,12 +16,6 @@
 #define u32 __u32
 #define u64 __u64
 
-#ifdef __x86_64__
-#define uptr u64
-#else
-#define uptr u32
-#endif
-
 struct completion;
 
 #include <video/uvesafb.h>
@@ -42,17 +36,21 @@ void v86_cleanup();
 #define DEFAULT_STACK_SIZE	0x02000
 #define REAL_MEM_BASE		0x10000
 #define REAL_MEM_SIZE		(0x30000 - REAL_MEM_BASE)
-#define BIOS_MEM_SIZE		(0x100000 - REAL_MEM_BASE - REAL_MEM_SIZE)
+#define BIOS_BASE			0xa0000
+#define BIOS_SIZE			(MEM_SIZE - BIOS_BASE)
 
-void *v86_mem_alloc(int size);
-void v86_mem_free(void *m);
+u32 v86_mem_alloc(int size);
+void v86_mem_free(u32 m);
 int v86_mem_init(void);
 void v86_mem_cleanup(void);
 
-u16 get_int_seg(int i);
-u16 get_int_off(int i);
-
-extern u8 *real_mem;
+u8 v_rdb(u32 addr);
+u16 v_rdw(u32 addr);
+u32 v_rdl(u32 addr);
+void v_wrb(u32 addr, u8 val);
+void v_wrw(u32 addr, u16 val);
+void v_wrl(u32 addr, u32 val);
+void *vptr(u32 addr);
 
 extern int iopl (int __level);
 extern int ioperm (unsigned long int __from, unsigned long int __num,

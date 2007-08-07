@@ -2,6 +2,35 @@
 #include <lrmi.h>
 #include "v86.h"
 
+/* Memory access functions */
+u8 v_rdb(u32 addr) {
+	return *(u8*)(addr);
+}
+
+u16 v_rdw(u32 addr) {
+	return *(u16*)(addr);
+}
+
+u32 v_rdl(u32 addr) {
+	return *(u32*)(addr);
+}
+
+void v_wrb(u32 addr, u8 val) {
+	*(u8*)(addr) = val;
+}
+
+void v_wrw(u32 addr, u16 val) {
+	*(u16*)(addr) = val;
+}
+
+void v_wrl(u32 addr, u32 val) {
+	*(u32*)(addr) = val;
+}
+
+void *vptr(u32 addr) {
+	return (u8*)addr;
+}
+
 void rconv_v86_to_LRMI(struct v86_regs *rs, struct LRMI_regs *rd)
 {
 	memset(rd, 0, sizeof(*rd));

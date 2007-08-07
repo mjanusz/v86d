@@ -4,8 +4,8 @@
 #include "v86.h"
 #include "v86_x86emu.h"
 
-u8 *stack;
-u8 *halt;
+u32 stack;
+u32 halt;
 
 __BUILDIO(b,b,u8);
 __BUILDIO(w,w,u16);
@@ -22,7 +22,7 @@ void printk(const char *fmt, ...)
 void pushw(u16 val)
 {
 	X86_ESP -= 2;
-	wrw(((u32) X86_SS << 4) + X86_SP, val);
+	v_wrw(((u32) X86_SS << 4) + X86_SP, val);
 }
 
 static void x86emu_do_int(int num)
@@ -37,8 +37,8 @@ static void x86emu_do_int(int num)
 	pushw(X86_IP);
 
 	X86_EFLAGS = X86_EFLAGS & ~(X86_VIF_MASK | X86_TF_MASK);
-	X86_CS = rdw((num << 2) + 2);
-	X86_IP = rdw((num << 2));
+	X86_CS = v_rdw((num << 2) + 2);
+	X86_IP = v_rdw((num << 2));
 }
 
 int v86_init()
@@ -52,19 +52,29 @@ int v86_init()
 		.outw = &x_outw,
 		.outl = &x_outl,
 	};
+
+	X86EMU_memFuncs memFuncs = {
+		.rdb = &v_rdb,
+		.rdw = &v_rdw,
+		.rdl = &v_rdl,
+		.wrb = &v_wrb,
+		.wrw = &v_wrw,
+		.wrl = &v_wrl,
+	};
+
 	int i;
 
 	v86_mem_init();
 
 	stack = v86_mem_alloc(DEFAULT_STACK_SIZE);
-	X86_SS = (uptr)stack >> 4;
-	X86_ESP = 0xfffe;
+	X86_SS = stack >> 4;
+	X86_ESP = DEFAULT_STACK_SIZE;
 
 	halt = v86_mem_alloc(0x100);
-	*halt = 0xF4;
+	v_wrb(halt, 0xF4);
 
-	/* Setup x86emu I/O functions */
 	X86EMU_setupPioFuncs(&pioFuncs);
+	X86EMU_setupMemFuncs(&memFuncs);
 
 	/* Setup interrupt handlers */
 	for (i = 0; i < 256; i++) {
@@ -74,11 +84,6 @@ int v86_init()
 
 	/* Set the default flags */
 	X86_EFLAGS = X86_IF_MASK | X86_IOPL_MASK;
-
-	/* M is a macro poiting to the global virtual machine state
-	 * for x86emu. */
-	M.mem_base = 0x0;
-	M.mem_size = MEM_SIZE;
 
 	ioperm(0, 1024, 1);
 	iopl(3);
@@ -139,14 +144,14 @@ int v86_int(int num, struct v86_regs *regs)
 	X86_GS = 0;
 	X86_FS = 0;
 	X86_DS = 0x0040;
-	X86_CS  = get_int_seg(num);
-	X86_EIP = get_int_off(num);
-	X86_SS = (u32)(uptr)stack >> 4;
-	X86_ESP = 0xffff;
+	X86_CS  = v_rdw((num << 2) + 2);
+	X86_EIP = v_rdw((num << 2));
+	X86_SS = stack >> 4;
+	X86_ESP = DEFAULT_STACK_SIZE;
 	X86_EFLAGS = X86_IF_MASK | X86_IOPL_MASK;
 
 	pushw(X86_EFLAGS);
-	pushw(((u32)(uptr)halt >> 4));
+	pushw((halt >> 4));
 	pushw(0x0);
 
 	X86EMU_exec();
