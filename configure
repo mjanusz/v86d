@@ -19,10 +19,13 @@ copt_x86emu_def=auto
 copt_x86emu_test()
 {
 	local m=`uname -m`
-	if [ "$m" != "i686" -a "$m" != "i586" -a "$m" != "i486" -a "$m" != "i386" ]; then
+	if [ "$m" = "i686" -o "$m" = "i586" -o "$m" = "i486" -o "$m" = "i386" ]; then
+		echo "n";
+	elif [ "$m" = "x86_64" ]; then
 		echo "y";
 	else
-		echo "n";
+		echo "It looks like your architecture '$m' isn't supported by this version of v86d." >&2
+		exit 1
 	fi
 }
 
