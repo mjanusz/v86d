@@ -8,10 +8,15 @@ x86 BIOS code.  The code is executed in a controlled environment
 and the results are passed back to the kernel via the netlink
 interface.
 
-2. Configuration
+2. Suported architectures
+-------------------------
+This version of v86d supports the following architectures:
+x86, x86-64 (amd64).
+
+3. Configuration
 ----------------
 
-2.1. The C library
+3.1. The C library
 ------------------
 v86d can be compiled against two different C libraries: glibc
 and klibc, glibc being the default.
@@ -26,7 +31,7 @@ To compile v86d against klibc, run ./configure --with-klibc
 after making sure that a recent (1.4 or newer) version of
 klibc is installed on your system.
 
-2.2. The emulator backend
+3.2. The emulator backend
 -------------------------
 On x86, the code executed by v86d can be run either in a fully
 software-emulated environment (x86emu) or a virtualized
@@ -36,7 +41,7 @@ or 64-bit systems, the code is always run by x86emu.
 To choose the x86emu backend on a x86 system, run ./configure
 --with-x86emu.
 
-3. Installation & Usage
+4. Installation & Usage
 -----------------------
 To configure, build and install v86d with the default settings,
 run:
@@ -53,7 +58,7 @@ If you want to include v86d into an initramfs image,
 misc/initramfs provides a minimal config parsable by
 gen_init_cpio.
 
-4. Licensing
+5. Licensing
 ------------
 v86d is licensed under GPL v2.
 
