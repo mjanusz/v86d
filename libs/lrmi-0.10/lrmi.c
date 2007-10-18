@@ -327,15 +327,14 @@ LRMI_init(void)
 	 Map the Interrupt Vectors (0x0 - 0x400) + BIOS data (0x400 - 0x502)
 	 and the ROM (0xa0000 - 0x100000)
 	*/
+
+	/*
+	 * v86d: map the IVTBDA area as shared, see note in v86_mem.c for
+	 * an explanation
+	 */
 	if (!map_file((void *)0, 0x502,
 	 PROT_READ | PROT_WRITE | PROT_EXEC,
-	 MAP_FIXED | MAP_PRIVATE, "/dev/zero", 0)) {
-		real_mem_deinit();
-		return 0;
-	}
-
-	if (!read_file("/dev/mem", (void *)0, 0x502)) {
-		munmap((void *)0, 0x502);
+	 MAP_FIXED | MAP_SHARED, "/dev/mem", 0)) {
 		real_mem_deinit();
 		return 0;
 	}
