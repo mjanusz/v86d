@@ -23,7 +23,9 @@ struct completion;
 //#define ulog(args...)	do {} while (0)
 //#define ulog(args...)		fprintf(stdout, ##args)
 
-#define ulog(level, args...)	syslog(level, ##args)
+#define MAX_LOG_LEVEL	LOG_WARNING
+
+#define ulog(level, args...)	if (level <= MAX_LOG_LEVEL) { syslog(level, ##args); }
 
 int v86_init();
 int v86_int(int num, struct v86_regs *regs);
