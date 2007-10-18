@@ -162,19 +162,19 @@ int v86_int(int num, struct v86_regs *regs)
 
 void v86_dump_regs()
 {
-	ulog(
+	ulog(LOG_DEBUG,
 		"EAX=0x%8.8lx, EBX=0x%8.8lx, ECX=0x%8.8lx, EDX=0x%8.8lx\n",
 		(unsigned long)X86_EAX, (unsigned long)X86_EBX,
 		(unsigned long)X86_ECX, (unsigned long)X86_EDX);
-	ulog(
+	ulog(LOG_DEBUG,
 		"ESP=0x%8.8lx, EBP=0x%8.8lx, ESI=0x%8.8lx, EDI=0x%8.8lx\n",
 		(unsigned long)X86_ESP, (unsigned long)X86_EBP,
 		(unsigned long)X86_ESI, (unsigned long)X86_EDI);
-    ulog(
+    ulog(LOG_DEBUG,
 		"CS=0x%4.4x, SS=0x%4.4x,"
 		" DS=0x%4.4x, ES=0x%4.4x, FS=0x%4.4x, GS=0x%4.4x\n",
 		X86_CS, X86_SS, X86_DS, X86_ES, X86_FS, X86_GS);
-    ulog(
+    ulog(LOG_DEBUG,
 		"EIP=0x%8.8lx, EFLAGS=0x%8.8lx\n",
 		(unsigned long)X86_EIP, (unsigned long)X86_EFLAGS);
 }

@@ -72,7 +72,7 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 
 		/* Mode list is somewhere else. We're seriously screwed. */
 		} else {
-			ulog("Can't retrieve mode list from %x\n", t);
+			ulog(LOG_ERR, "Can't retrieve mode list from %x\n", t);
 			ib->mode_list_ptr = 0;
 		}
 

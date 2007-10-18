@@ -23,7 +23,7 @@ struct completion;
 //#define ulog(args...)	do {} while (0)
 //#define ulog(args...)		fprintf(stdout, ##args)
 
-#define ulog(args...)	syslog(LOG_INFO, ##args)
+#define ulog(level, args...)	syslog(level, ##args)
 
 int v86_init();
 int v86_int(int num, struct v86_regs *regs);

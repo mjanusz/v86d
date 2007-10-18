@@ -30,7 +30,7 @@ void *vptr(u32 addr) {
 	else if (addr >= BIOS_BASE && addr < BIOS_BASE + BIOS_SIZE)
 		return (mem_bios + addr - BIOS_BASE);
 	else {
-		ulog("trying to access an unsupported memory region at %x", addr);
+		ulog(LOG_WARNING, "Trying to access an unsupported memory region at %x", addr);
 		return NULL;
 	}
 }
@@ -72,14 +72,14 @@ static void *map_file(void *start, size_t length, int prot, int flags, char *nam
 	fd = open(name, (flags & MAP_SHARED) ? O_RDWR : O_RDONLY);
 
 	if (fd == -1) {
-		ulog("open '%s' failed with: %s\n", name, strerror(errno));
+		ulog(LOG_ERR, "Open '%s' failed with: %s\n", name, strerror(errno));
 		return NULL;
 	}
 
 	m = mmap(start, length, prot, flags, fd, offset);
 
 	if (m == (void *)-1) {
-		ulog("mmap '%s' failed with: %s\n", name, strerror(errno));
+		ulog(LOG_ERR, "mmap '%s' failed with: %s\n", name, strerror(errno));
 		close(fd);
 		return NULL;
 	}

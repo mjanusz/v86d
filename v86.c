@@ -41,7 +41,7 @@ static int netlink_send(int s, struct cn_msg *msg)
 
 	err = send(s, nlh, size, 0);
 	if (err == -1)
-		ulog("Failed to send: %s [%d].\n", strerror(errno), errno);
+		ulog(LOG_ERR, "Failed to send: %s [%d].\n", strerror(errno), errno);
 
 	return err;
 }
@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
 
 		switch (reply->nlmsg_type) {
 		case NLMSG_ERROR:
-			ulog("Error message received.\n");
+			ulog(LOG_ERR, "Error message received.\n");
 			break;
 
 		case NLMSG_DONE:
