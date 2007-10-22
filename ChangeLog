@@ -1,5 +1,14 @@
+2007-10-22 * 0.1.1
+
+- LRMI bugfix: map the IVTBDA as shared memory.
+- Update testvbe to display basic information about the Video BIOS.
+
+2007-09-04 * 0.1
+
+- No changes since 0.1-rc5.
+
 2007-08-07 * 0.1-rc5
 
-- Change the v86 memory access functions so that they no longer require 
+- Change the v86 memory access functions so that they no longer require
   mapping files into the first 1 MB of the address space.
 
