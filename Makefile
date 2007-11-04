@@ -1,6 +1,6 @@
 config_opt = $(shell if [ -e config.h -a -n "`egrep '^\#define[[:space:]]+$(1)([[:space:]]+|$$)' config.h 2>/dev/null`" ]; then echo true ; fi)
 
-.PHONY: clean install x86emu lrmi
+.PHONY: clean install install_testvbe x86emu lrmi
 
 INSTALL = install
 KDIR   ?= /lib/modules/$(shell uname -r)/source
@@ -26,7 +26,15 @@ else
 	V86LIB = lrmi
 endif
 
-all: $(V86LIB) v86d
+DEBUG_BUILD =
+DEBUG_INSTALL =
+
+ifeq ($(call config_opt,CONFIG_DEBUG),true)
+	DEBUG_BUILD += testvbe
+	DEBUG_INSTALL += install_testvbe
+endif
+
+all: $(V86LIB) v86d $(DEBUG_BUILD)
 
 %.o: %.c v86.h
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -51,6 +59,8 @@ clean:
 distclean: clean
 	rm -rf config.h
 
-install:
+install: $(DEBUG_INSTALL)
 	$(INSTALL) -D v86d $(DESTDIR)/sbin/v86d
 
+install_testvbe:
+	$(INSTALL) -D testvbe $(DESTDIR)/sbin/testvbe

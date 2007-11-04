@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# ./configure -- A very simple configure script for splashutils.
+# ./configure -- A very simple configure script for v86d.
 #
 # (c) 2006-2007, Michal Januszewski <spock@gentoo.org>
 #
@@ -11,6 +11,11 @@ copt_klibc=CONFIG_KLIBC
 copt_klibc_desc="Link statically against klibc"
 copt_klibc_type="bool"
 copt_klibc_def=n
+
+copt_debug=CONFIG_DEBUG
+copt_debug_desc="Use additional debugging features"
+copt_debug_type="bool"
+copt_debug_def=n
 
 copt_x86emu=CONFIG_X86EMU
 copt_x86emu_desc="Use x86emu for BIOS calls"

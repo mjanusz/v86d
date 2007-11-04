@@ -5,6 +5,7 @@
 #include <syslog.h>
 #include <sys/types.h>
 #include <linux/connector.h>
+#include "config.h"
 
 #undef u8
 #undef u16
@@ -23,9 +24,14 @@ struct completion;
 //#define ulog(args...)	do {} while (0)
 //#define ulog(args...)		fprintf(stdout, ##args)
 
-#define MAX_LOG_LEVEL	LOG_WARNING
+#ifdef CONFIG_DEBUG
+	#define MAX_LOG_LEVEL	LOG_DEBUG
+#else
+	#define MAX_LOG_LEVEL	LOG_WARNING
+#endif
 
-#define ulog(level, args...)	if (level <= MAX_LOG_LEVEL) { syslog(level, ##args); }
+/* klibc doesn't provide setlogmask(), so simulate it here */
+#define ulog(level, args...)   if (level <= MAX_LOG_LEVEL) { syslog(level, ##args); }
 
 int v86_init();
 int v86_int(int num, struct v86_regs *regs);
