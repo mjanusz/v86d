@@ -1,3 +1,8 @@
+2007-11-04 * 0.1.2
+
+- Info display formatting changes in testvbe.
+- Add the '--with-debug' configure option.
+
 2007-10-22 * 0.1.1
 
 - LRMI bugfix: map the IVTBDA as shared memory.
