@@ -9,6 +9,9 @@
 #include "v86.h"
 #include "testvbe.h"
 
+#define reg16(reg) (reg & 0xffff)
+#define failed(tsk) (reg16(tsk.regs.eax) != 0x004f)
+
 int main(int argc, char *argv[])
 {
 	struct uvesafb_task tsk;
@@ -21,19 +24,27 @@ int main(int argc, char *argv[])
 	tsk.regs.eax = 0x4f00;
 	tsk.flags = TF_VBEIB;
 	tsk.buf_len = sizeof(ib);
-	strncpy(&ib.vbe_signature, "VBE2", 4);
+	strncpy((char*)&ib.vbe_signature, "VBE2", 4);
 
-	v86_task(&tsk, &ib);
+	v86_task(&tsk, (u8*)&ib);
+	if (failed(tsk)) {
+		fprintf(stderr, "Getting VBE Info Block failed with eax = %.4x\n",
+				reg16(tsk.regs.eax));
+		return -1;
+	}
 
-	t = &ib;
+	t = (u8*)&ib;
 
-	printf("VBE Version:     %x\n", ib.vbe_version);
+	printf("VBE Version:     %x.%.2x\n", ((ib.vbe_version & 0xf00) >> 8), (ib.vbe_version & 0xff));
 	printf("OEM String:      %s\n", ib.oem_string_ptr + t);
 	printf("OEM Vendor Name: %s\n", ib.oem_vendor_name_ptr + t);
 	printf("OEM Prod. Name:  %s\n", ib.oem_product_name_ptr + t);
 	printf("OEM Prod. Rev:   %s\n", ib.oem_product_rev_ptr + t);
 
-	for (s = ib.mode_list_ptr + t; *s != 0xffff; s++) {
+	printf("\n%-6s %-6s mode\n", "ID", "attr");
+	printf("---------------------------\n");
+
+	for (s = t + ib.mode_list_ptr; *s != 0xffff; s++) {
 		struct vbe_mode_ib mib;
 
 		tsk.regs.eax = 0x4f01;
@@ -41,21 +52,17 @@ int main(int argc, char *argv[])
 		tsk.flags = TF_BUF_RET | TF_BUF_ESDI;
 		tsk.buf_len = sizeof(mib);
 
-		v86_task(&tsk, &mib);
+		v86_task(&tsk, (u8*)&mib);
+		if (failed(tsk)) {
+			fprintf(stderr, "Getting Mode Info Block for mode %.4x "
+					"failed with eax = %.4x\n",	*s, reg16(tsk.regs.eax));
+			return -1;
+		}
 
-		printf("%6.4x %6.4x %dx%d-%d\n", *s, mib.mode_attr,
+		printf("%-6.4x %-6.4x %dx%d-%d\n", *s, mib.mode_attr,
 				mib.x_res, mib.y_res, mib.bits_per_pixel);
 	}
 
-/*	tsk.regs.eax = 0x4f02;
-	tsk.regs.ebx = 0xc161;
-	tsk.buf_len = 0;
-	tsk.flags = 0;
-
-	v86_task(&tsk, buf);
-
-	printf("got eax = %x\n", tsk.regs.eax);
-*/
 	v86_cleanup();
 
 	return 0;
