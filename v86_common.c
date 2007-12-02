@@ -57,12 +57,15 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 		t = addr(ib->mode_list_ptr);
 		/* Mode list is in the buffer, we're good. */
 		if (t < bufend) {
+			ulog(LOG_DEBUG, "The mode list is in the buffer at %.8x.", t);
 			ib->mode_list_ptr = t - lbuf;
 
 		/* Mode list is in the ROM. We copy as much of it as we can
 		 * to the task buffer. */
 		} else if (t > 0xa0000) {
 			u16 tmp;
+
+			ulog(LOG_DEBUG, "The mode list is in the Video ROM at %.8x", t);
 
 			td = (u16*) (buf + 512);
 
