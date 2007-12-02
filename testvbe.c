@@ -21,6 +21,8 @@ int main(int argc, char *argv[])
 
 	if (v86_init())
 		return -1;
+
+	memset(&tsk, 0, sizeof(tsk));
 	tsk.regs.eax = 0x4f00;
 	tsk.flags = TF_VBEIB;
 	tsk.buf_len = sizeof(ib);
@@ -47,6 +49,7 @@ int main(int argc, char *argv[])
 	for (s = t + ib.mode_list_ptr; *s != 0xffff; s++) {
 		struct vbe_mode_ib mib;
 
+		memset(&tsk, 0, sizeof(tsk));
 		tsk.regs.eax = 0x4f01;
 		tsk.regs.ecx = *s;
 		tsk.flags = TF_BUF_RET | TF_BUF_ESDI;
