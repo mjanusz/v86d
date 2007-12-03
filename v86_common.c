@@ -53,6 +53,7 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 
 		/* The original VBE Info Block is 512 bytes long. */
 		fsize = tsk->buf_len - 512;
+		buf += 512;
 
 		t = addr(ib->mode_list_ptr);
 		/* Mode list is in the buffer, we're good. */
@@ -67,25 +68,26 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 
 			ulog(LOG_DEBUG, "The mode list is in the Video ROM at %.8x", t);
 
-			td = (u16*) (buf + 512);
+			td = (u16*)buf;
 
 			while (fsize > 2 && (tmp = v_rdw(t)) != 0xffff) {
 				fsize -= 2;
 				*td = tmp;
-				t += 2;
 				td++;
+				t += 2;
+				buf += 2;
 			}
 
 			ib->mode_list_ptr = 512;
 			*td = 0xffff;
+			buf += 2;
+			fsize -= 2;
 
 		/* Mode list is somewhere else. We're seriously screwed. */
 		} else {
 			ulog(LOG_ERR, "Can't retrieve mode list from %x\n", t);
 			ib->mode_list_ptr = 0;
 		}
-
-		buf += 512;
 
 		vbeib_get_string(oem_string_ptr);
 		vbeib_get_string(oem_vendor_name_ptr);
