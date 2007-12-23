@@ -50,12 +50,16 @@ run:
  # make
  # make install
 
+If the kernel that you're currently running doesn't provide
+uvesafb, you can use the KDIR variable to point make to a
+different kernel tree (e.g. `make KDIR=/usr/src/linux`).
+
 v86d isn't meant to be used in an interactive way. It should
 be started and called by the kernel. If you want to see it in
 action, build and load the uvesafb kernel module.
 
 If you want to include v86d into an initramfs image,
-misc/initramfs provides a minimal config parsable by
+misc/initramfs provides a minimal config file parsable by
 gen_init_cpio.
 
 5. Licensing
