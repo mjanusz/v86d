@@ -54,7 +54,9 @@ int req_exec(int s, struct cn_msg *msg)
 	if (tsk->flags & TF_EXIT)
 		return 1;
 
-	v86_task(tsk, buf);
+	if (v86_task(tsk, buf))
+		return 2;
+
 	netlink_send(s, msg);
 
 	return 0;

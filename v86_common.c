@@ -40,6 +40,10 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 		u16 *td;
 
 		lbuf = v86_mem_alloc(tsk->buf_len);
+		if (!lbuf) {
+			ulog(LOG_ERR, "Memory allocation for a VBE IB buffer failed.");
+			return -1;
+		}
 		memcpy(vptr(lbuf), buf, tsk->buf_len);
 		tsk->regs.es  = lbuf >> 4;
 		tsk->regs.edi = 0x0000;
@@ -98,6 +102,10 @@ out_vbeib:
 	} else {
 		if (tsk->buf_len) {
 			lbuf = v86_mem_alloc(tsk->buf_len);
+			if (!lbuf) {
+				ulog(LOG_ERR, "Memory allocation for a v86d task buffer failed.");
+				return -1;
+			}
 			memcpy(vptr(lbuf), buf, tsk->buf_len);
 		}
 

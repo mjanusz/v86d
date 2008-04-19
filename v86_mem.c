@@ -96,7 +96,7 @@ static int real_mem_init(void)
 	mem_real = map_file(NULL, REAL_MEM_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
 						MAP_PRIVATE, "/dev/zero", 0);
 	if (!mem_real)
-		return 0;
+		return 1;
 
 	mem_info.ready = 1;
 	mem_info.count = 1;

@@ -28,7 +28,9 @@ int main(int argc, char *argv[])
 	tsk.buf_len = sizeof(ib);
 	strncpy((char*)&ib.vbe_signature, "VBE2", 4);
 
-	v86_task(&tsk, (u8*)&ib);
+	if (v86_task(&tsk, (u8*)&ib))
+		return -1;
+
 	if (failed(tsk)) {
 		fprintf(stderr, "Getting VBE Info Block failed with eax = %.4x\n",
 				reg16(tsk.regs.eax));
@@ -55,7 +57,9 @@ int main(int argc, char *argv[])
 		tsk.flags = TF_BUF_RET | TF_BUF_ESDI;
 		tsk.buf_len = sizeof(mib);
 
-		v86_task(&tsk, (u8*)&mib);
+		if (v86_task(&tsk, (u8*)&mib))
+			return -1;
+
 		if (failed(tsk)) {
 			fprintf(stderr, "Getting Mode Info Block for mode %.4x "
 					"failed with eax = %.4x\n",	*s, reg16(tsk.regs.eax));

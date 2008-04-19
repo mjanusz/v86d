@@ -64,13 +64,25 @@ int v86_init()
 
 	int i;
 
-	v86_mem_init();
+	if (v86_mem_init()) {
+		ulog(LOG_ERR, "v86 memory initialization failed.");
+		return -1;
+	}
 
 	stack = v86_mem_alloc(DEFAULT_STACK_SIZE);
+	if (!stack) {
+		ulog(LOG_ERR, "v86 memory allocation failed.");
+		return -1;
+	}
+
 	X86_SS = stack >> 4;
 	X86_ESP = DEFAULT_STACK_SIZE;
 
 	halt = v86_mem_alloc(0x100);
+	if (!halt) {
+		ulog(LOG_ERR, "v86 memory alocation failed.");
+		return -1;
+	}
 	v_wrb(halt, 0xF4);
 
 	X86EMU_setupPioFuncs(&pioFuncs);
