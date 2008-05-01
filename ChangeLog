@@ -1,3 +1,8 @@
+2008-05-01 * 0.1.5
+
+- Don't map memory beyond 0x10000 (this fixes the problem with
+  devmem_is_allowed() denying access to /dev/mem in recent kernels).
+
 2008-04-19 * 0.1.4
 
 - Fix error handling in the case of a failed v86 memory allocation.

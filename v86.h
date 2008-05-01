@@ -38,7 +38,7 @@ int v86_int(int num, struct v86_regs *regs);
 int v86_task(struct uvesafb_task *tsk, u8 *buf);
 void v86_cleanup();
 
-#define MEM_SIZE			0x10ffef
+#define MEM_SIZE			0x100000
 #define IVTBDA_BASE			0x00000
 #define IVTBDA_SIZE			0x01000
 #define DEFAULT_STACK_SIZE	0x02000
