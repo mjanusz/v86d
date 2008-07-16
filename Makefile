@@ -20,7 +20,7 @@ ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	V86LIB = x86emu
 else
 	CFLAGS += -Ilibs/lrmi-0.10
-	LDFLAGS += -Llibs/lrmi-0.10 -static
+	LDFLAGS += -Llibs/lrmi-0.10 -static -Wl,-z,execheap
 	LDLIBS += -llrmi
 	V86OBJS = v86_lrmi.o
 	V86LIB = lrmi

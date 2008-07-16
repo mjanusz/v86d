@@ -348,7 +348,7 @@ LRMI_init(void)
 	}
 
 	if (!map_file((void *)0xa0000, 0x100000 - 0xa0000,
-	 PROT_READ | PROT_WRITE,
+	 PROT_READ | PROT_WRITE | PROT_EXEC,
 	 MAP_FIXED | MAP_SHARED, "/dev/mem", 0xa0000)) {
 		munmap((void *)0, 0x502);
 		real_mem_deinit();
