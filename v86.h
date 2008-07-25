@@ -38,14 +38,17 @@ int v86_int(int num, struct v86_regs *regs);
 int v86_task(struct uvesafb_task *tsk, u8 *buf);
 void v86_cleanup();
 
-#define MEM_SIZE			0x100000
 #define IVTBDA_BASE			0x00000
 #define IVTBDA_SIZE			0x01000
 #define DEFAULT_STACK_SIZE	0x02000
 #define REAL_MEM_BASE		0x10000
 #define REAL_MEM_SIZE		(0x30000 - REAL_MEM_BASE)
-#define BIOS_BASE			0xa0000
-#define BIOS_SIZE			(MEM_SIZE - BIOS_BASE)
+#define EBDA_BASE			0x9fc00
+#define VRAM_BASE			0xa0000
+#define VRAM_SIZE			0x20000
+#define SBIOS_SIZE			0x10000
+#define SBIOS_BASE			0xf0000
+#define VBIOS_BASE			0xc0000
 
 u32 v86_mem_alloc(int size);
 void v86_mem_free(u32 m);
