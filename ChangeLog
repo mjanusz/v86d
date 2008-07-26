@@ -1,3 +1,11 @@
+2008-07-26 * 0.1.6
+
+- Add support for BSWAP and CPUID in x86emu.
+- Add support for SMSW and fix a bug in INS/OUTS
+  (patch by Mark Karpeles <mark@hell.ne.jp>).
+- Properly map the BIOS and Video BIOS memory
+  segments.  Try to find and map the EBDA (x86emu).
+
 2008-07-16 * 0.1.5.2
 
 - Fix compatibility with NX and PaX.
