@@ -58,16 +58,64 @@ Handles illegal opcodes.
 static void x86emuOp2_illegal_op(
 	u8 op2)
 {
+	int mod, rl, rh;
 	START_OF_INSTR();
+	FETCH_DECODE_MODRM(mod, rh, rl);
 	DECODE_PRINTF("ILLEGAL EXTENDED X86 OPCODE\n");
 	TRACE_REGS();
-	printk("%04x:%04x: %02X ILLEGAL EXTENDED X86 OPCODE!\n",
-		M.x86.R_CS, M.x86.R_IP-2,op2);
+	printk("%04x:%04x: %02X /%d ILLEGAL EXTENDED X86 OPCODE! (mod=%d rl=%d)\n",
+		M.x86.R_CS, M.x86.R_IP-2,op2, rh, mod, rl);
     HALT_SYS();
     END_OF_INSTR();
 }
 
 #define xorl(a,b)   ((a) && !(b)) || (!(a) && (b))
+
+/****************************************************************************
+REMARKS:
+Handles opcode 0x0f,0x01
+****************************************************************************/
+static void x86emuOp2_group_g(u8 X86EMU_UNUSED(op2))
+{
+	int mod, rl, rh;
+	u16 *destreg;
+	uint destoffset;
+
+	START_OF_INSTR();
+	FETCH_DECODE_MODRM(mod, rh, rl);
+	switch (rh) {
+		case 4: // SMSW (Store Machine Status Word)
+			// Decode the mod byte to find the addressing
+			// Always returns 0x10 (initial value as per intel manual volume 3, figure 8-1
+			switch (mod) {
+				case 0:
+					destoffset = decode_rm00_address(rl);
+					store_data_word(destoffset, 0x10);
+					break;
+				case 1:
+					destoffset = decode_rm01_address(rl);
+					store_data_word(destoffset, 0x10);
+					break;
+				case 2:
+					destoffset = decode_rm10_address(rl);
+					store_data_word(destoffset, 0x10);
+					break;
+				case 3:
+					destreg = DECODE_RM_WORD_REGISTER(rl);
+					*destreg = 0x10;
+					break;
+			}
+			break;
+		default:
+			DECODE_PRINTF("ILLEGAL EXTENDED X86 OPCODE IN 0F 01\n");
+			TRACE_REGS();
+			printk("%04x:%04x: 0F %02X /%d ILLEGAL EXTENDED X86 OPCODE! (mod=%d rl=%d)\n",
+				M.x86.R_CS, M.x86.R_IP-2,op2, rh, mod, rl);
+			HALT_SYS();
+			break;
+	}
+	END_OF_INSTR();
+}
 
 /****************************************************************************
 REMARKS:
@@ -2624,7 +2672,7 @@ static void x86emuOp2_bswap(u8 X86EMU_UNUSED(op2))
 void (*x86emu_optab2[256])(u8) =
 {
 /*  0x00 */ x86emuOp2_illegal_op,  /* Group F (ring 0 PM)      */
-/*  0x01 */ x86emuOp2_illegal_op,  /* Group G (ring 0 PM)      */
+/*  0x01 */ x86emuOp2_group_g,     /* Group G (ring 0 PM)      */
 /*  0x02 */ x86emuOp2_illegal_op,  /* lar (ring 0 PM)          */
 /*  0x03 */ x86emuOp2_illegal_op,  /* lsl (ring 0 PM)          */
 /*  0x04 */ x86emuOp2_illegal_op,
