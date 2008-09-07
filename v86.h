@@ -46,8 +46,8 @@ void v86_cleanup();
 #define EBDA_BASE			0x9fc00
 #define VRAM_BASE			0xa0000
 #define VRAM_SIZE			0x20000
-#define SBIOS_SIZE			0x10000
-#define SBIOS_BASE			0xf0000
+#define SBIOS_SIZE			0x20000
+#define SBIOS_BASE			0xe0000
 #define VBIOS_BASE			0xc0000
 
 u32 v86_mem_alloc(int size);
