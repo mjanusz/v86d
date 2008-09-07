@@ -347,10 +347,19 @@ LRMI_init(void)
 		return 0;
 	}
 
-	if (!map_file((void *)0xa0000, 0x100000 - 0xa0000,
-	 PROT_READ | PROT_WRITE | PROT_EXEC,
+	if (!map_file((void *)0xa0000, 0x20000,
+	 PROT_READ | PROT_WRITE,
 	 MAP_FIXED | MAP_SHARED, "/dev/mem", 0xa0000)) {
 		munmap((void *)0, 0x502);
+		real_mem_deinit();
+		return 0;
+	}
+
+	if (!map_file((void *)0xc0000, 0x30000,
+		PROT_READ | PROT_WRITE | PROT_EXEC,
+		MAP_FIXED | MAP_SHARED, "/dev/mem", 0xc0000)) {
+		munmap((void *)0, 0x502);
+		munmap((void *)0xa0000, 0x20000);
 		real_mem_deinit();
 		return 0;
 	}
