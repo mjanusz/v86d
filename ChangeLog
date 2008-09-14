@@ -1,3 +1,9 @@
+2008-09-14 * 0.1.7
+
+- Map the VRAM and Video ROM/System ROM seperately in lrmi (should fix
+  PaX/NX-related problems).
+- Map 0xe0000-0xfffff instead of 0xf0000-0xfffff.
+
 2008-07-26 * 0.1.6
 
 - Add support for BSWAP and CPUID in x86emu.
