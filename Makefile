@@ -11,6 +11,7 @@ endif
 
 CFLAGS ?= -Wall -g -O2
 CFLAGS += -I$(KDIR)/include
+LDFLAGS += -Wl,-z,execheap
 
 ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	CFLAGS += -Ilibs/x86emu
