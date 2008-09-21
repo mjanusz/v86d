@@ -26,10 +26,10 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 {
 	u32 lbuf = 0;
 
-	ulog(LOG_DEBUG, "task flags: 0x%.2lx\n", tsk->flags);
-	ulog(LOG_DEBUG, "EAX=%.8lx EBX=%.8lx ECX=%.8lx EDX=%.8lx\n",
+	ulog(LOG_DEBUG, "task flags: 0x%02x\n", tsk->flags);
+	ulog(LOG_DEBUG, "EAX=0x%08x EBX=0x%08x ECX=0x%08x EDX=0x%08x\n",
 		 tsk->regs.eax, tsk->regs.ebx, tsk->regs.ecx, tsk->regs.edx);
-	ulog(LOG_DEBUG, "ESP=%.8lx EBP=%.8lx ESI=%.8lx EDI=%.8lx\n",
+	ulog(LOG_DEBUG, "ESP=0x%08x EBP=0x%08x ESI=0x%08x EDI=0x%08x\n",
 		 tsk->regs.esp, tsk->regs.ebp, tsk->regs.esi, tsk->regs.edi);
 
 	/* Get the VBE Info Block */
