@@ -1,3 +1,9 @@
+2008-09-21 * 0.1.8
+
+- Fix PaX compatibility (patch by the PaX team).
+- Fix a bug where lrmi would not map the last segment of low RAM
+  (patch by PaX team).
+
 2008-09-14 * 0.1.7
 
 - Map the VRAM and Video ROM/System ROM seperately in lrmi (should fix
