@@ -110,7 +110,7 @@ static int real_mem_init(void)
 	if (mem_info.ready)
 		return 0;
 
-	mem_real = map_file(NULL, REAL_MEM_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+	mem_real = map_file(NULL, REAL_MEM_SIZE, PROT_READ | PROT_WRITE,
 						MAP_PRIVATE, "/dev/zero", 0);
 	if (!mem_real)
 		return 1;
@@ -293,7 +293,7 @@ int v86_mem_init(void)
 	}
 	vbios_size = tmp[2] * 0x200;
 	ulog(LOG_DEBUG, "VBIOS at %5x-%5x\n", VBIOS_BASE, VBIOS_BASE + vbios_size - 1);
-	mem_vbios = map_file(NULL, vbios_size, PROT_READ | PROT_EXEC,
+	mem_vbios = map_file(NULL, vbios_size, PROT_READ,
 							MAP_SHARED, "/dev/mem", VBIOS_BASE);
 
 	if (!mem_vbios) {
@@ -303,7 +303,7 @@ int v86_mem_init(void)
 	}
 
 	/* Map the system BIOS */
-	mem_sbios = map_file(NULL, SBIOS_SIZE, PROT_READ | PROT_EXEC,
+	mem_sbios = map_file(NULL, SBIOS_SIZE, PROT_READ,
 					MAP_SHARED, "/dev/mem", SBIOS_BASE);
 	if (!mem_sbios) {
 		ulog(LOG_ERR, "Failed to mmap the System BIOS as %5x.", SBIOS_BASE);
