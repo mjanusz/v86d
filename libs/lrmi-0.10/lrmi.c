@@ -372,6 +372,18 @@ LRMI_init(void)
 	context.stack_seg = (unsigned int)m >> 4;
 	context.stack_off = DEFAULT_STACK_SIZE;
 
+#if defined(__linux__)
+	/*
+	 The return to 32-bit code (vm86_ret section) is linked
+	 into the absolute address 0x9000.
+	*/
+	context.ret_seg = 0x0900;
+	context.ret_off = 0x0000;
+
+	asm (".pushsection vm86_ret, \"ax\"\nint %0\n.popsection"
+		: /* no return value */
+		: "i" (RETURN_TO_32_INT));
+#else
 	/*
 	 Allocate the return to 32 bit routine
 	*/
@@ -380,9 +392,10 @@ LRMI_init(void)
 	context.ret_seg = (unsigned int)m >> 4;
 	context.ret_off = (unsigned int)m & 0xf;
 
-	((unsigned char *)m)[0] = 0xcd; 	/* int opcode */
+	((unsigned char *)m)[0] = 0xcd;		/* int opcode */
 	((unsigned char *)m)[1] = RETURN_TO_32_INT;
 
+#endif  /* __linux__ */
 	memset(&context.vm, 0, sizeof(context.vm));
 
 	/*

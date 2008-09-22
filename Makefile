@@ -11,7 +11,6 @@ endif
 
 CFLAGS ?= -Wall -g -O2
 CFLAGS += -I$(KDIR)/include
-LDFLAGS += -Wl,-z,execheap
 
 ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	CFLAGS += -Ilibs/x86emu
@@ -21,7 +20,7 @@ ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	V86LIB = x86emu
 else
 	CFLAGS += -Ilibs/lrmi-0.10
-	LDFLAGS += -Llibs/lrmi-0.10 -static
+	LDFLAGS += -Llibs/lrmi-0.10 -static -Wl,--section-start,vm86_ret=0x9000
 	LDLIBS += -llrmi
 	V86OBJS = v86_lrmi.o
 	V86LIB = lrmi

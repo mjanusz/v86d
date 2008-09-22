@@ -26,7 +26,7 @@ liblrmi.a: $(objects)
 
 liblrmi.so: $(pic_objects)
 #	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -o $@ $^
-	$(CC) $(CPPFLAGS) $(CFLAGS) -Wl,-soname,$(LIBNAME).so.$(MAJOR) -fPIC -shared -o $(LIBNAME).so.$(VERSION) $^
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Wl,-soname,$(LIBNAME).so.$(MAJOR) -Wl,--section-start,vm86_ret=0x9000 -fPIC -shared -o $(LIBNAME).so.$(VERSION) $^
 	ln -sf $(LIBNAME).so.$(VERSION) $(LIBNAME).so.$(MAJOR)
 	ln -sf $(LIBNAME).so.$(MAJOR) $(LIBNAME).so
 
