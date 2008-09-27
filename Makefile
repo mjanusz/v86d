@@ -16,13 +16,13 @@ ifeq ($(call config_opt,CONFIG_X86EMU),true)
 	CFLAGS += -Ilibs/x86emu
 	LDFLAGS += -Llibs/x86emu
 	LDLIBS += -lx86emu
-	V86OBJS = v86_x86emu.o v86_mem.o
+	V86OBJS = v86_x86emu.o v86_mem.o v86_common.o 
 	V86LIB = x86emu
 else
 	CFLAGS += -Ilibs/lrmi-0.10
 	LDFLAGS += -Llibs/lrmi-0.10 -static -Wl,--section-start,vm86_ret=0x9000
 	LDLIBS += -llrmi
-	V86OBJS = v86_lrmi.o
+	V86OBJS = v86_lrmi.o v86_common.o
 	V86LIB = lrmi
 endif
 
@@ -39,17 +39,17 @@ all: $(V86LIB) v86d $(DEBUG_BUILD)
 %.o: %.c v86.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-v86d: v86.o v86_common.o $(V86OBJS)
-	$(CC) $(LDFLAGS) $+ $(LDLIBS) -o $@
+v86d: $(V86OBJS) $(V86LIB) v86.o
+	$(CC) $(LDFLAGS) $(V86OBJS) v86.o $(LDLIBS) -o $@
 
-testvbe: testvbe.o v86_common.o $(V86OBJS)
-	$(CC) $(LDFLAGS) $+ $(LDLIBS) -o $@
+testvbe: $(V86OBJS) $(V86LIB) testvbe.o
+	$(CC) $(LDFLAGS) $(V86OBJS) testvbe.o $(LDLIBS) -o $@
 
 x86emu:
-	make -w -C libs/x86emu
+	$(MAKE) -w -C libs/x86emu
 
 lrmi:
-	make -e -w -C libs/lrmi-0.10 liblrmi.a
+	$(MAKE) -e -w -C libs/lrmi-0.10 liblrmi.a
 
 clean:
 	rm -rf *.o v86d testvbe
