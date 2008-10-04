@@ -1,3 +1,10 @@
+2008-10-04 * 0.1.9
+
+- Fix a off-by-one error in the VBE string copy function.
+- Fix concurrent build.
+- Don't map memory with PROT_EXEC for x86emu.
+- Remove dynamically generated code from LRMI.
+
 2008-09-21 * 0.1.8
 
 - Fix PaX compatibility (patch by the PaX team).
