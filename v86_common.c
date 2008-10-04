@@ -12,7 +12,7 @@
 	} else if (t > 0xa0000 && fsize > 0) {		\
 		strncpy((char*)buf, vptr(t), fsize);	\
 		ib->name = tsk->buf_len - fsize;		\
-		l = strlen((char*)buf);					\
+		l = strlen((char*)buf) + 1;				\
 		fsize -= l;								\
 		buf += l;								\
 		if (fsize < 0)							\
