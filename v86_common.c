@@ -9,17 +9,25 @@
 	t = addr(ib->name);							\
 	if (t < bufend) {							\
 		ib->name = t - lbuf;					\
-	} else if (t > 0xa0000 && fsize > 0) {		\
-		strncpy((char*)buf, vptr(t), fsize);	\
-		ib->name = tsk->buf_len - fsize;		\
-		l = strlen((char*)buf) + 1;				\
+		l = strnlen((char*)buf + ib->name, bufend-t); \
+		if (buf[ib->name + l] != 0)				\
+			buf[ib->name + l] = 0;				\
 		fsize -= l;								\
-		buf += l;								\
-		if (fsize < 0)							\
-			fsize = 0;							\
+		cbuf += l;								\
+	} else if (t > 0xa0000 && fsize > 0) {		\
+		strncpy((char*)cbuf, vptr(t), fsize);	\
+		l = strnlen((char*)cbuf, fsize);		\
+		if (cbuf[l] != 0)						\
+			cbuf[l] = 0;						\
+		ib->name = tsk->buf_len - fsize;		\
+		l++;									\
+		fsize -= l;								\
+		cbuf += l;								\
 	} else {									\
 		ib->name = 0;							\
 	}											\
+	if (fsize < 0)								\
+		fsize = 0;								\
 }
 
 int v86_task(struct uvesafb_task *tsk, u8 *buf)
@@ -38,6 +46,7 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 		int fsize;
 		u32 t, bufend;
 		u16 *td;
+		u8 *cbuf;
 
 		lbuf = v86_mem_alloc(tsk->buf_len);
 		if (!lbuf) {
@@ -57,13 +66,25 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 
 		/* The original VBE Info Block is 512 bytes long. */
 		fsize = tsk->buf_len - 512;
-		buf += 512;
+		cbuf = buf + 512;
 
 		t = addr(ib->mode_list_ptr);
 		/* Mode list is in the buffer, we're good. */
 		if (t < bufend) {
 			ulog(LOG_DEBUG, "The mode list is in the buffer at %.8x.", t);
 			ib->mode_list_ptr = t - lbuf;
+			td = (u16*) (buf + ib->mode_list_ptr);
+
+			while (fsize > 2 && *td != 0xffff) {
+				td++;
+				t += 2;
+				fsize -= 2;
+				cbuf += 2;
+			}
+
+			*td = 0xffff;
+			cbuf += 2;
+			fsize -= 2;
 
 		/* Mode list is in the ROM. We copy as much of it as we can
 		 * to the task buffer. */
@@ -72,19 +93,19 @@ int v86_task(struct uvesafb_task *tsk, u8 *buf)
 
 			ulog(LOG_DEBUG, "The mode list is in the Video ROM at %.8x", t);
 
-			td = (u16*)buf;
+			td = (u16*)cbuf;
 
 			while (fsize > 2 && (tmp = v_rdw(t)) != 0xffff) {
 				fsize -= 2;
 				*td = tmp;
 				td++;
 				t += 2;
-				buf += 2;
+				cbuf += 2;
 			}
 
 			ib->mode_list_ptr = 512;
 			*td = 0xffff;
-			buf += 2;
+			cbuf += 2;
 			fsize -= 2;
 
 		/* Mode list is somewhere else. We're seriously screwed. */
