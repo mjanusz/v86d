@@ -44,7 +44,7 @@ void *vptr(u32 addr) {
 		return (mem_vram + addr - VRAM_BASE);
 	else if (addr < IVTBDA_SIZE)
 		return (mem_low + addr);
-	else if (addr >= ebda_start && addr < ebda_start + ebda_size)
+	else if (mem_ebda && addr >= ebda_start && addr < ebda_start + ebda_size)
 		return (mem_ebda + addr - ebda_start + ebda_diff);
 	else {
 		ulog(LOG_WARNING, "Trying to access an unsupported memory region at %x", addr);
