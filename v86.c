@@ -129,6 +129,11 @@ int main(int argc, char *argv[])
 
 		reply = (struct nlmsghdr *)buf;
 
+		/* Ignore requests coming from outside the kernel. */
+		if (reply->nlmsg_pid != 0) {
+			continue;
+		}
+
 		switch (reply->nlmsg_type) {
 		case NLMSG_ERROR:
 			ulog(LOG_ERR, "Error message received.\n");
