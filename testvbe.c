@@ -66,8 +66,8 @@ int main(int argc, char *argv[])
 			return -1;
 		}
 
-		printf("%-6.4x %-6.4x %dx%d-%d\n", *s, mib.mode_attr,
-				mib.x_res, mib.y_res, mib.bits_per_pixel);
+		printf("%-6.4x %-6.4x %dx%d-%d %x\n", *s, mib.mode_attr,
+				mib.x_res, mib.y_res, mib.bits_per_pixel, mib.phys_base_ptr);
 	}
 
 	v86_cleanup();
