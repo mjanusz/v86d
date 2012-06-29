@@ -1,7 +1,11 @@
 OBJS = decode.o fpu.o ops.o ops2.o prim_ops.o sys.o
 
+ifeq ($(AR),)
+	AR = ar
+endif
+
 libx86emu.a: $(OBJS)
-	ar rv $@ $+
+	$(AR) rv $@ $+
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) -o $@ $<
